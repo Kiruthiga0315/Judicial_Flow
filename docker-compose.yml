@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
     container_name: judicialflow-db
     environment:
-      POSTGRES_USER: jfuser
-      POSTGRES_PASSWORD: jfpass
-      POSTGRES_DB: judicialflow
+      POSTGRES_USER: ${DB_USER:-jfuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-jfpass}
+      POSTGRES_DB: ${DB_NAME:-judicialflow}
     ports:
-      - "5433:5432"
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped

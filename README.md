@@ -14,7 +14,7 @@ A Java / Spring Boot decision-support system that optimizes trial court hearing 
    ```bash
    docker compose up -d
    ```
-   This starts the DB on `localhost:5433` with credentials `jfuser` / `jfpass`.
+   This starts the DB on the configured `DB_PORT` (default `5433`).
 
 2. **Run the Application**: 
    ```bash
@@ -22,17 +22,25 @@ A Java / Spring Boot decision-support system that optimizes trial court hearing 
    ```
    The application will connect to the PostgreSQL instance and automatically apply the schema migrations via Flyway.
 
+3. **Run the Tests**:
+   ```bash
+   mvn clean test
+   ```
+   Integration tests run against a real PostgreSQL 15 container managed via Testcontainers.
+
 ## Environment Variables
 
+- `SERVER_PORT`: Application port (default: 8081)
 - `DB_HOST`: Host for postgres (default: localhost)
-- `DB_PORT`: Port for postgres (default: 5432)
+- `DB_PORT`: Port for postgres (default: 5433)
 - `DB_NAME`: Database name (default: judicialflow)
 - `DB_USER`: Database user (default: jfuser)
 - `DB_PASSWORD`: Database password (default: jfpass)
+- `generator.seed`: Seed for deterministic case generation (default: 12345)
 
 ## Synthetic Case Generator
 
-The system uses purely synthetic data calibrated to match published NJDG (National Judicial Data Grid) aggregate statistics. No real case or individual data is used.
+The system uses purely synthetic data calibrated to match approximate published NJDG (National Judicial Data Grid) aggregate statistics. No real case or individual data is used. We use a deterministic generator that targets approximate NJDG statistics within a ±1.5 points tolerance.
 
 To generate a sample synthetic caseload, trigger the dev-only REST endpoint once the application is running:
 
@@ -46,14 +54,6 @@ This will insert 100 cases into the database with case types and pendency distri
 When the application is running, the interactive OpenAPI Swagger UI and schema are available at:
 - **Swagger UI**: [http://localhost:8081/swagger-ui/index.html](http://localhost:8081/swagger-ui/index.html)
 - **OpenAPI JSON**: [http://localhost:8081/v3/api-docs](http://localhost:8081/v3/api-docs)
-
-## Running Integration Tests
-
-Integration tests run against a real PostgreSQL 16 container managed via Testcontainers:
-
-```bash
-mvn test
-```
 
 ## Phase 4: Scheduling Engine
 
@@ -107,4 +107,3 @@ Every assignment includes an explainability record showing:
 - **Runner-up**: the next-best option that was passed over
 - **Rejection reason**: why the runner-up scored worse
 - **Constraints satisfied**: list of hard constraints verified
-
