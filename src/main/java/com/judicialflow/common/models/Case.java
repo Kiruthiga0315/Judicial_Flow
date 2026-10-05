@@ -38,9 +38,6 @@ public class Case {
     @Column(nullable = false)
     private CaseStatus currentStatus;
 
-    @Column(columnDefinition = "TEXT")
-    private String citations;
-
     @Builder.Default
     @Column(nullable = false)
     private int priorAdjournments = 0;

@@ -63,19 +63,12 @@ public class SyntheticCaseGeneratorController {
             
             // Phase 2: Disposal Rates (approx 20% of generated cases are historical/disposed)
             CaseStatus status = (random.nextInt(100) < 20) ? CaseStatus.DISPOSED : CaseStatus.PENDING;
-            
-            // Phase 2: Citations (generate random citations for criminal types)
-            String citations = null;
-            if (type == CaseType.BAIL || type == CaseType.POCSO || type == CaseType.CRIMINAL_OTHER) {
-                citations = "IPC " + (300 + random.nextInt(200));
-            }
 
             Case legalCase = Case.builder()
                     .caseNumber("SYN-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                     .caseType(type)
                     .filingDate(filingDate)
                     .currentStatus(status)
-                    .citations(citations)
                     .priorAdjournments(random.nextInt(10)) // random 0-9 adjournments
                     .build();
             

@@ -35,9 +35,6 @@ public class CaseResponse {
     @Schema(description = "Current status of the case", example = "PENDING")
     private CaseStatus currentStatus;
 
-    @Schema(description = "Statutory citations", example = "IPC 302, 304B")
-    private String citations;
-
     @Schema(description = "Number of prior adjournments", example = "0")
     private int priorAdjournments;
 
@@ -73,7 +70,6 @@ public class CaseResponse {
                 .caseType(c.getCaseType())
                 .filingDate(c.getFilingDate())
                 .currentStatus(c.getCurrentStatus())
-                .citations(c.getCitations())
                 .priorAdjournments(c.getPriorAdjournments())
                 .linkedCaseId(c.getLinkedCase() != null ? c.getLinkedCase().getId() : null)
                 .linkedCaseNumber(c.getLinkedCase() != null ? c.getLinkedCase().getCaseNumber() : null)
