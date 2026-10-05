@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,8 +49,17 @@ class SyntheticCaseGeneratorControllerTest {
         
         List<Case> generatedCases = captor.getValue();
         
-        // Count by CaseType
+        // Count by CaseType and verify disposed logic
         Map<CaseType, Long> typeCounts = generatedCases.stream()
+                .peek(c -> {
+                    if (c.getCurrentStatus() == com.judicialflow.common.enums.CaseStatus.DISPOSED) {
+                        assertNotNull(c.getDisposedDate(), "Disposed cases must have a disposed_date");
+                        assertTrue(!c.getDisposedDate().isBefore(c.getFilingDate()), "Disposed date cannot be before filing date");
+                        assertTrue(!c.getDisposedDate().isAfter(java.time.LocalDate.now()), "Disposed date cannot be in the future");
+                    } else {
+                        assertNull(c.getDisposedDate(), "Non-disposed cases must not have a disposed_date");
+                    }
+                })
                 .collect(Collectors.groupingBy(Case::getCaseType, Collectors.counting()));
 
         // Verify tolerance against approximate NJDG targets
