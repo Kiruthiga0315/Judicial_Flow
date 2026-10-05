@@ -35,6 +35,9 @@ public class CaseResponse {
     @Schema(description = "Current status of the case", example = "PENDING")
     private CaseStatus currentStatus;
 
+    @Schema(description = "Date the case was disposed, if applicable", example = "2024-02-20")
+    private LocalDate disposedDate;
+
     @Schema(description = "Number of prior adjournments", example = "0")
     private int priorAdjournments;
 
@@ -70,6 +73,7 @@ public class CaseResponse {
                 .caseType(c.getCaseType())
                 .filingDate(c.getFilingDate())
                 .currentStatus(c.getCurrentStatus())
+                .disposedDate(c.getDisposedDate())
                 .priorAdjournments(c.getPriorAdjournments())
                 .linkedCaseId(c.getLinkedCase() != null ? c.getLinkedCase().getId() : null)
                 .linkedCaseNumber(c.getLinkedCase() != null ? c.getLinkedCase().getCaseNumber() : null)

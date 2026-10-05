@@ -38,6 +38,9 @@ public class Case {
     @Column(nullable = false)
     private CaseStatus currentStatus;
 
+    @Column(name = "disposed_date")
+    private LocalDate disposedDate;
+
     @Builder.Default
     @Column(nullable = false)
     private int priorAdjournments = 0;

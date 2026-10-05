@@ -20,4 +20,10 @@ public final class NjdgCalibrationTargets {
             CaseType.CIVIL, 20.0,           // Source: approximate estimate
             CaseType.MATRIMONIAL, 5.0       // Source: approximate estimate
     );
+
+    /**
+     * Approximate/illustrative disposal rate for synthetic case generation.
+     * Represents the historical backlog of closed cases.
+     */
+    public static final double DISPOSAL_RATE_PERCENTAGE = 20.0;
 }

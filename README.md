@@ -40,7 +40,7 @@ A Java / Spring Boot decision-support system that optimizes trial court hearing 
 
 ## Synthetic Case Generator
 
-The system uses purely synthetic data calibrated to match approximate published NJDG (National Judicial Data Grid) aggregate statistics. No real case or individual data is used. We use a deterministic generator that targets approximate NJDG statistics within a ±1.5 points tolerance.
+The system uses purely synthetic data calibrated to match approximate published NJDG (National Judicial Data Grid) aggregate statistics. No real case or individual data is used. The targets are illustrative approximations of published NJDG aggregates, not exact figures. We use a deterministic generator that targets these approximate NJDG statistics within a ±1.5 points tolerance.
 
 To generate a sample synthetic caseload, trigger the dev-only REST endpoint once the application is running:
 

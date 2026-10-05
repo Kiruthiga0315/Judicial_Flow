@@ -61,14 +61,24 @@ public class SyntheticCaseGeneratorController {
             CaseType type = determineCaseType();
             LocalDate filingDate = determineFilingDate();
             
-            // Phase 2: Disposal Rates (approx 20% of generated cases are historical/disposed)
-            CaseStatus status = (random.nextInt(100) < 20) ? CaseStatus.DISPOSED : CaseStatus.PENDING;
+            // Phase 2: Disposal Rates
+            CaseStatus status = (random.nextInt(100) < NjdgCalibrationTargets.DISPOSAL_RATE_PERCENTAGE) 
+                                ? CaseStatus.DISPOSED : CaseStatus.PENDING;
+            
+            LocalDate disposedDate = null;
+            if (status == CaseStatus.DISPOSED) {
+                // Random disposal date between filing date and today
+                int daysSinceFiling = (int) java.time.temporal.ChronoUnit.DAYS.between(filingDate, LocalDate.now());
+                int daysToDisposal = daysSinceFiling > 0 ? random.nextInt(daysSinceFiling) : 0;
+                disposedDate = filingDate.plusDays(daysToDisposal);
+            }
 
             Case legalCase = Case.builder()
                     .caseNumber("SYN-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                     .caseType(type)
                     .filingDate(filingDate)
                     .currentStatus(status)
+                    .disposedDate(disposedDate)
                     .priorAdjournments(random.nextInt(10)) // random 0-9 adjournments
                     .build();
             
