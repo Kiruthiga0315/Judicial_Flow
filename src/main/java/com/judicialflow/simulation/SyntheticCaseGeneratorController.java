@@ -32,6 +32,7 @@ public class SyntheticCaseGeneratorController {
             @Value("${generator.seed:12345}") long seed) {
         this.caseRepository = caseRepository;
         this.random = new Random(seed);
+        log.info("Initialized SyntheticCaseGeneratorController with seed: {}", seed);
     }
 
     /*
