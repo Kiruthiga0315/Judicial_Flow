@@ -32,7 +32,7 @@ CREATE TABLE priority_scores (
     total_score NUMERIC(10, 4) NOT NULL,
     base_weight NUMERIC(10, 4) NOT NULL,
     age_multiplier NUMERIC(10, 4) NOT NULL,
-    adjournment_penalty NUMERIC(10, 4) NOT NULL,
+    adjournment_boost NUMERIC(10, 4) NOT NULL,
     explanation TEXT NOT NULL,
     computed_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

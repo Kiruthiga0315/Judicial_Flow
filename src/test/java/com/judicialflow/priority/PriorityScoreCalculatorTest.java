@@ -199,11 +199,11 @@ class PriorityScoreCalculatorTest {
     // =========================================================================
 
     @Nested
-    @DisplayName("Adjournment penalty cap")
+    @DisplayName("Adjournment boost cap")
     class AdjournmentCapTests {
 
         @Test
-        @DisplayName("Adjournment penalty is capped at maxAdjournmentContribution (30)")
+        @DisplayName("Adjournment boost is capped at maxAdjournmentContribution (30)")
         void adjournmentCappedAt30() {
             // 10 adjournments × 5.00 = 50 raw → capped at 30
             Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now().minusDays(10), 10, null);
@@ -340,7 +340,7 @@ class PriorityScoreCalculatorTest {
         @DisplayName("Calculator respects custom adjournment penalty from config")
         void customAdjournmentWeight() {
             PriorityWeightsConfig custom = new PriorityWeightsConfig();
-            custom.setAdjournmentPenaltyPerOccurrence(new BigDecimal("8.00"));
+            custom.setAdjournmentBoostPerOccurrence(new BigDecimal("8.00"));
             custom.setMaxAdjournmentContribution(new BigDecimal("100.00")); // high cap
 
             PriorityScoreCalculator customCalc = new PriorityScoreCalculator(custom);

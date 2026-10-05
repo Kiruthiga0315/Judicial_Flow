@@ -21,7 +21,7 @@ import java.util.UUID;
  *   <tr><th>Column</th><th>Scoring factor</th></tr>
  *   <tr><td>base_weight</td><td>Case-type statutory urgency contribution</td></tr>
  *   <tr><td>age_multiplier</td><td>Time-pending (aging) contribution</td></tr>
- *   <tr><td>adjournment_penalty</td><td>Prior-adjournment contribution</td></tr>
+ *   <tr><td>adjournment_boost</td><td>Prior-adjournment contribution</td></tr>
  *   <tr><td>linked_case_bonus</td><td>Linked-case bonus contribution</td></tr>
  *   <tr><td>explanation</td><td>JSON-serialised {@code List<ScoreFactorBreakdown>} for full
  *                              explainability (stored verbatim so historical records are
@@ -76,7 +76,7 @@ public class PriorityScore {
 
     /** Prior-adjournment penalty contribution. */
     @Column(nullable = false, precision = 10, scale = 4)
-    private BigDecimal adjournmentPenalty;
+    private BigDecimal adjournmentBoost;
 
     /** Linked-case bonus contribution (added in V3 migration). */
     @Builder.Default

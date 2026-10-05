@@ -21,7 +21,7 @@ import java.util.Map;
  *       unresolved adds this fraction to the score, capped at
  *       {@code maxAgingContribution} so very old cases don't dominate
  *       entirely.</li>
- *   <li><b>adjournmentPenaltyPerOccurrence</b> – each prior adjournment
+ *   <li><b>adjournmentBoostPerOccurrence</b> – each prior adjournment
  *       signals repeat delay and adds a fixed penalty.</li>
  *   <li><b>linkedCaseBonus</b> – a case that is linked to another
  *       open case gets a small urgency bump because resolving it may
@@ -66,14 +66,14 @@ public class PriorityWeightsConfig {
     private BigDecimal maxAgingContribution = new BigDecimal("40.00");
 
     // -----------------------------------------------------------------------
-    // Adjournment penalty
+    // Adjournment boost
     // -----------------------------------------------------------------------
 
     /**
      * Score added for each recorded prior adjournment.
      * Default: 5 points per adjournment.
      */
-    private BigDecimal adjournmentPenaltyPerOccurrence = new BigDecimal("5.00");
+    private BigDecimal adjournmentBoostPerOccurrence = new BigDecimal("5.00");
 
     /**
      * Maximum score contribution from adjournments.
@@ -136,12 +136,12 @@ public class PriorityWeightsConfig {
         this.maxAgingContribution = maxAgingContribution;
     }
 
-    public BigDecimal getAdjournmentPenaltyPerOccurrence() {
-        return adjournmentPenaltyPerOccurrence;
+    public BigDecimal getAdjournmentBoostPerOccurrence() {
+        return adjournmentBoostPerOccurrence;
     }
 
-    public void setAdjournmentPenaltyPerOccurrence(BigDecimal adjournmentPenaltyPerOccurrence) {
-        this.adjournmentPenaltyPerOccurrence = adjournmentPenaltyPerOccurrence;
+    public void setAdjournmentBoostPerOccurrence(BigDecimal adjournmentBoostPerOccurrence) {
+        this.adjournmentBoostPerOccurrence = adjournmentBoostPerOccurrence;
     }
 
     public BigDecimal getMaxAdjournmentContribution() {

@@ -27,7 +27,7 @@ import java.util.UUID;
  * <pre>
  *   totalScore = caseTypeUrgency(type)
  *              + min(daysPending × agingWeightPerDay, maxAgingContribution)
- *              + min(priorAdjournments × adjournmentPenaltyPerOccurrence, maxAdjournmentContribution)
+ *              + min(priorAdjournments × adjournmentBoostPerOccurrence, maxAdjournmentContribution)
  *              + (hasLinkedCase ? linkedCaseBonus : 0)
  * </pre>
  *
@@ -123,7 +123,7 @@ public class PriorityScoreCalculator {
         // -----------------------------------------------------------------------
         int adjournments = legalCase.getPriorAdjournments();
         BigDecimal rawAdjournmentContribution = BigDecimal.valueOf(adjournments)
-                .multiply(weights.getAdjournmentPenaltyPerOccurrence())
+                .multiply(weights.getAdjournmentBoostPerOccurrence())
                 .setScale(SCALE, RM);
         BigDecimal adjournmentContribution = rawAdjournmentContribution
                 .min(weights.getMaxAdjournmentContribution())
@@ -134,10 +134,10 @@ public class PriorityScoreCalculator {
         factors.add(ScoreFactorBreakdown.builder()
                 .factorName("Prior Adjournments")
                 .rawValue(BigDecimal.valueOf(adjournments).setScale(SCALE, RM))
-                .weight(weights.getAdjournmentPenaltyPerOccurrence())
+                .weight(weights.getAdjournmentBoostPerOccurrence())
                 .contribution(adjournmentContribution)
                 .explanation(buildAdjournmentExplanation(adjournments,
-                        weights.getAdjournmentPenaltyPerOccurrence(),
+                        weights.getAdjournmentBoostPerOccurrence(),
                         adjournmentContribution, weights.getMaxAdjournmentContribution(),
                         adjournmentCapped))
                 .build());

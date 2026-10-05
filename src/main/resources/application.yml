@@ -51,7 +51,7 @@ priority:
     # Cap on total aging contribution (prevents very old cases from dominating).
     max-aging-contribution: 40
     # Penalty per prior adjournment occurrence.
-    adjournment-penalty-per-occurrence: 5.00
+    adjournment-boost-per-occurrence: 5.00
     # Cap on total adjournment contribution.
     max-adjournment-contribution: 30
     # Flat bonus when the case is linked to another open case.

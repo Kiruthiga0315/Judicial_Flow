@@ -155,7 +155,7 @@ public class PriorityScoreService {
                 .totalScore(result.getTotalScore())
                 .baseWeight(typeUrgency)          // mapped: case-type urgency → base weight
                 .ageMultiplier(aging)             // mapped: aging contribution → age multiplier
-                .adjournmentPenalty(adjournment)  // mapped: adjournment contribution
+                .adjournmentBoost(adjournment)  // mapped: adjournment contribution
                 .linkedCaseBonus(linkedBonus)     // mapped: linked-case bonus
                 .explanation(explanationJson)
                 .build();
