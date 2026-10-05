@@ -107,3 +107,25 @@ Every assignment includes an explainability record showing:
 - **Runner-up**: the next-best option that was passed over
 - **Rejection reason**: why the runner-up scored worse
 - **Constraints satisfied**: list of hard constraints verified
+
+## Phase 5: Case Duration Estimator
+
+The Case Duration Estimator predicts the total expected resolution time (in days) from filing to disposal for a given case.
+
+### Methodology and Train/Test Validation
+We implement a **Simple Linear Regression** grouped by `CaseType`, using `priorAdjournments` as the sole explanatory feature (X) and total days to disposal as the target (Y). 
+Instead of a complex ML pipeline, this relies on Ordinary Least Squares computed in plain Java to guarantee total interpretability.
+
+When the application boots (or trains on-demand), it splits the `DISPOSED` synthetic historical cases into an **80/20 train/test split**. 
+* **Training:** The model coefficients (intercept, slope) are derived purely from the 80% training set.
+* **Validation (MAE):** The model predicts the duration for the remaining 20% holdout test set, and calculates the **Mean Absolute Error (MAE)**. This test MAE directly determines the bounding box (`minDurationDays`, `maxDurationDays`) around the estimate returned to the client.
+
+### Explainability
+Because we use isolated simple linear regressions per `CaseType`, the influential features driving any given prediction are inherently:
+1. **Case Type** (which dictates *which* regression model is applied).
+2. **Prior Adjournments** (the numerical value input into the selected linear equation).
+
+### Honest Evaluation & Limitations
+* **Synthetic Data Bias:** The model relies entirely on the synthetic case data generated in Phase 1. Thus, its predictions heavily reflect the data generator's assumptions rather than the dynamics of real-world court dockets.
+* **Limited Features:** Because it is a simple linear regression based solely on prior adjournments, it fails to account for complex, non-linear case nuances or dynamically changing judge caseloads.
+* **Insufficient Data Fallbacks:** If a `CaseType` has fewer than 5 historical disposed cases, the system defaults to a generic fallback (180 days ± 90 days) since a robust train/test split is mathematically unfeasible.
