@@ -1,0 +1,81 @@
+server:
+  port: ${SERVER_PORT:8081}
+  
+spring:
+  application:
+    name: judicialflow
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:judicialflow}
+    username: ${DB_USER:jfuser}
+    password: ${DB_PASSWORD:jfpass}
+  jpa:
+    hibernate:
+      ddl-auto: validate # Use validate, rely on Flyway
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  batch:
+    jdbc:
+      initialize-schema: always # Initialize spring batch schema automatically
+  mail:
+    host: localhost
+    port: 1025 # Mailhog or similar for local
+
+generator:
+  enabled: ${GENERATOR_ENABLED:false}
+  cases-to-generate: ${CASES_TO_GENERATE:5000}
+
+# -------------------------------------------------------------------
+# Phase 3: Priority / Aging Scoring Module
+# All weights are documented here so they can be reviewed and tuned
+# without reading Java code.  Changes take effect on restart.
+# -------------------------------------------------------------------
+priority:
+  weights:
+    # Case-type statutory urgency (raw additive score, 0–100 range).
+    # BAIL and POCSO carry the highest urgency:
+    #   BAIL  – personal liberty at stake (Art. 21, Constitution of India)
+    #   POCSO – mandatory time-bound trial (Section 35, POCSO Act 2012)
+    case-type-urgency:
+      BAIL: 50
+      POCSO: 50
+      MATRIMONIAL: 25
+      CRIMINAL_OTHER: 20
+      CIVIL: 10
+    # Aging: score points added per calendar day the case has been pending.
+    aging-weight-per-day: 0.10
+    # Cap on total aging contribution (prevents very old cases from dominating).
+    max-aging-contribution: 40
+    # Penalty per prior adjournment occurrence.
+    adjournment-penalty-per-occurrence: 5.00
+    # Cap on total adjournment contribution.
+    max-adjournment-contribution: 30
+    # Flat bonus when the case is linked to another open case.
+    linked-case-bonus: 10
+
+# -------------------------------------------------------------------
+# Phase 4: Scheduling Engine
+# Constraint-satisfaction engine configuration.  All weights and
+# parameters are documented here so they can be tuned without reading
+# Java code.  Changes take effect on restart.
+# -------------------------------------------------------------------
+scheduling:
+  # Default hearing duration in minutes when not specified per-case.
+  default-hearing-duration-minutes: 60
+  # Number of business days forward to generate schedule proposals.
+  horizon-days: 5
+  # Maximum iterations for the local-search repair phase.
+  repair-max-iterations: 100
+  # Soft constraint weights (should sum to 1.0 for interpretability).
+  soft-weights:
+    # Higher-priority cases should get earlier time slots.
+    priority-ordering: 0.5
+    # Distribute hearings evenly across judges.
+    workload-balance: 0.3
+    # Minimise changes versus the previous scheduling run.
+    schedule-churn: 0.2
+

@@ -1,0 +1,110 @@
+# JudicialFlow
+
+A Java / Spring Boot decision-support system that optimizes trial court hearing scheduling.
+
+## Prerequisites
+
+- Docker Desktop (or Docker Engine)
+- JDK 17+
+- Maven
+
+## Local Development Setup
+
+1. **Start PostgreSQL**: We use Docker to run a local PostgreSQL instance. Run the following command from the root of the `judicialflow` directory:
+   ```bash
+   docker compose up -d
+   ```
+   This starts the DB on `localhost:5433` with credentials `jfuser` / `jfpass`.
+
+2. **Run the Application**: 
+   ```bash
+   mvn spring-boot:run
+   ```
+   The application will connect to the PostgreSQL instance and automatically apply the schema migrations via Flyway.
+
+## Environment Variables
+
+- `DB_HOST`: Host for postgres (default: localhost)
+- `DB_PORT`: Port for postgres (default: 5432)
+- `DB_NAME`: Database name (default: judicialflow)
+- `DB_USER`: Database user (default: jfuser)
+- `DB_PASSWORD`: Database password (default: jfpass)
+
+## Synthetic Case Generator
+
+The system uses purely synthetic data calibrated to match published NJDG (National Judicial Data Grid) aggregate statistics. No real case or individual data is used.
+
+To generate a sample synthetic caseload, trigger the dev-only REST endpoint once the application is running:
+
+```bash
+curl -X POST "http://localhost:8081/api/dev/generator/cases?count=100"
+```
+This will insert 100 cases into the database with case types and pendency distributions matching the NJDG aggregates.
+
+## API Documentation (Swagger UI)
+
+When the application is running, the interactive OpenAPI Swagger UI and schema are available at:
+- **Swagger UI**: [http://localhost:8081/swagger-ui/index.html](http://localhost:8081/swagger-ui/index.html)
+- **OpenAPI JSON**: [http://localhost:8081/v3/api-docs](http://localhost:8081/v3/api-docs)
+
+## Running Integration Tests
+
+Integration tests run against a real PostgreSQL 16 container managed via Testcontainers:
+
+```bash
+mvn test
+```
+
+## Phase 4: Scheduling Engine
+
+### Algorithm
+
+The scheduling engine uses a **greedy weighted assignment with local-search repair** algorithm:
+
+1. **Greedy Pass**: Cases are sorted by priority score (descending). For each case, all possible (judge × courtroom × time slot) candidates are generated, filtered by hard constraints, and scored by soft constraints. The lowest-penalty candidate is selected.
+
+2. **Deferred Queue**: Cases with linked-case dependencies are deferred until their prerequisite is scheduled, then processed.
+
+3. **Complexity**: O(C × J × R × T) where C = cases, J = judges, R = courtrooms, T = time slots.
+
+### Hard Constraints (never violated)
+- No judge double-booking
+- No courtroom double-booking
+- Judge availability window enforcement
+- Courtroom availability window enforcement
+- Linked case sequencing (prerequisite must be scheduled first)
+
+### Soft Constraints (weighted optimization)
+- **Priority ordering** (weight 0.5): Higher-priority cases get earlier slots
+- **Workload balance** (weight 0.3): Even distribution across judges
+- **Schedule churn** (weight 0.2): Minimize changes from previous run
+
+### API Endpoints
+
+**Trigger a scheduling run** (returns proposals, does NOT auto-commit):
+```bash
+curl -X POST http://localhost:8081/api/scheduling/run \
+  -H "Content-Type: application/json" \
+  -d '{"horizonDays": 5, "defaultDurationMinutes": 60}'
+```
+
+**Retrieve a past run:**
+```bash
+curl http://localhost:8081/api/scheduling/runs/{runId}
+```
+
+**Manual override:**
+```bash
+curl -X POST http://localhost:8081/api/scheduling/override \
+  -H "Content-Type: application/json" \
+  -d '{"caseId":"...","judgeId":"...","courtroomId":"...","scheduledTime":"2026-09-21T10:00:00","reason":"Registrar requested","overriddenBy":"Registrar Kumar"}'
+```
+
+### Decision Log
+
+Every assignment includes an explainability record showing:
+- **Chosen slot**: judge, courtroom, time, soft score
+- **Runner-up**: the next-best option that was passed over
+- **Rejection reason**: why the runner-up scored worse
+- **Constraints satisfied**: list of hard constraints verified
+
