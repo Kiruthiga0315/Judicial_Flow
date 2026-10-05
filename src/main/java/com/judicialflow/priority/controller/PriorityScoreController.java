@@ -62,7 +62,7 @@ public class PriorityScoreController {
     public ResponseEntity<PriorityScoreResult> computeScore(
             @Parameter(description = "UUID of the case to score")
             @PathVariable UUID caseId) {
-        PriorityScoreResult result = priorityScoreService.computeAndPersist(caseId);
+        PriorityScoreResult result = priorityScoreService.computeAndPersist(caseId, "MANUAL");
         return ResponseEntity.ok(result);
     }
 

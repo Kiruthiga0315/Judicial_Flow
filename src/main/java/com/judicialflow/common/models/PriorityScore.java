@@ -91,6 +91,10 @@ public class PriorityScore {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String explanation;
 
+    @Column(name = "triggered_by", length = 50)
+    @Builder.Default
+    private String triggeredBy = "BATCH";
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime computedAt;

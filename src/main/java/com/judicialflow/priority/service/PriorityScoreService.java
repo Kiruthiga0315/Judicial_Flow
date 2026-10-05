@@ -59,13 +59,13 @@ public class PriorityScoreService {
      * @throws ResourceNotFoundException if the case does not exist or is soft-deleted
      */
     @Transactional
-    public PriorityScoreResult computeAndPersist(UUID caseId) {
+    public PriorityScoreResult computeAndPersist(UUID caseId, String triggeredBy) {
         Case legalCase = caseRepository.findByIdAndDeletedFalse(caseId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Case not found with id: " + caseId));
 
         PriorityScoreResult result = calculator.calculate(legalCase);
-        PriorityScore persisted = persist(legalCase, result);
+        PriorityScore persisted = persist(legalCase, result, triggeredBy);
 
         return withPersistedId(result, persisted.getId());
     }
@@ -87,7 +87,7 @@ public class PriorityScoreService {
                 .map(ps -> mapToResult(legalCase, ps))
                 .orElseGet(() -> {
                     PriorityScoreResult fresh = calculator.calculate(legalCase);
-                    PriorityScore persisted = persist(legalCase, fresh);
+                    PriorityScore persisted = persist(legalCase, fresh, "MANUAL");
                     return withPersistedId(fresh, persisted.getId());
                 });
     }
@@ -117,7 +117,7 @@ public class PriorityScoreService {
         List<PriorityScore> scored = openCases.stream()
                 .map(c -> {
                     PriorityScoreResult r = calculator.calculate(c);
-                    return persist(c, r);
+                    return persist(c, r, "BATCH");
                 })
                 .sorted((a, b) -> b.getTotalScore().compareTo(a.getTotalScore()))
                 .limit(limit)
@@ -139,7 +139,7 @@ public class PriorityScoreService {
     /**
      * Persist a computed result as a new {@link PriorityScore} row.
      */
-    private PriorityScore persist(Case legalCase, PriorityScoreResult result) {
+    private PriorityScore persist(Case legalCase, PriorityScoreResult result, String triggeredBy) {
         // Extract named factor contributions for the individual columns
         BigDecimal typeUrgency = factorContribution(result, "Case Type Urgency");
         BigDecimal aging = factorContribution(result, "Time Pending (Aging)");
@@ -158,6 +158,7 @@ public class PriorityScoreService {
                 .adjournmentBoost(adjournment)  // mapped: adjournment contribution
                 .linkedCaseBonus(linkedBonus)     // mapped: linked-case bonus
                 .explanation(explanationJson)
+                .triggeredBy(triggeredBy)
                 .build();
 
         PriorityScore saved = priorityScoreRepository.save(entity);
