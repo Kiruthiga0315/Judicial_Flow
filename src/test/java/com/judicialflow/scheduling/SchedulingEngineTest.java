@@ -64,7 +64,7 @@ class SchedulingEngineTest {
                 .horizonDays(1)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         assertTrue(result.getAssignments().isEmpty());
         assertTrue(result.getUnschedulableCases().isEmpty());
@@ -95,7 +95,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         assertEquals(1, result.getTotalAssigned());
         assertEquals(caseId, result.getAssignments().get(0).getCaseId());
@@ -135,7 +135,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         // Some must be unschedulable since we can't fit 20 in 8 slots
         assertTrue(result.getTotalUnschedulable() > 0,
@@ -177,7 +177,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         // Verify no courtroom double-booking
         assertNoDoubleBookings(result);
@@ -216,7 +216,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         assertEquals(1, result.getTotalAssigned());
         LocalDateTime assignedTime = result.getAssignments().get(0).getProposedTime();
@@ -245,7 +245,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         assertEquals(0, result.getTotalAssigned());
         assertEquals(1, result.getTotalUnschedulable());
@@ -288,7 +288,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         assertEquals(2, result.getTotalAssigned(), "Both cases should be assigned");
 
@@ -337,7 +337,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
         assertEquals(2, result.getTotalAssigned());
 
         LocalDateTime highTime = result.getAssignments().stream()
@@ -383,7 +383,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
         assertEquals(4, result.getTotalAssigned());
 
         long judge1Count = result.getAssignments().stream()
@@ -428,7 +428,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
 
         for (SchedulingResult.ProposedAssignment a : result.getAssignments()) {
             assertNotNull(a.getDecision(), "Decision record must not be null for " + a.getCaseNumber());
@@ -467,7 +467,7 @@ class SchedulingEngineTest {
                 .defaultDurationMinutes(60)
                 .build();
 
-        SchedulingResult result = engine.solve(input);
+        SchedulingResult result = engine.solve(input, 42L);
         assertEquals(1, result.getTotalAssigned());
 
         SchedulingResult.DecisionRecord dec = result.getAssignments().get(0).getDecision();

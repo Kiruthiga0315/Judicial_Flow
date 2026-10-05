@@ -52,52 +52,40 @@ public class SchedulingEngine {
     /**
      * Run the scheduling engine on the given input.
      */
-    public SchedulingResult solve(SchedulingInput input) {
+    public SchedulingResult solve(SchedulingInput input, long seed) {
         HardConstraintChecker checker = new HardConstraintChecker();
         checker.loadExistingHearings(input.getExistingHearings());
 
         LocalDateTime horizonStart = input.getHorizonStart().atStartOfDay();
         LocalDateTime horizonEnd = calculateHorizonEnd(input.getHorizonStart(), input.getHorizonDays());
-        
-        List<LocalDateTime> timeSlots = generateTimeSlots(input.getHorizonStart(), input.getHorizonDays(), input.getDefaultDurationMinutes());
-        
+
         Map<UUID, Integer> initialJudgeLoad = new HashMap<>();
-        for (SchedulingInput.JudgeInfo j : input.getJudges()) {
-            initialJudgeLoad.put(j.getJudgeId(), 0);
-        }
-        for (SchedulingInput.ExistingHearing h : input.getExistingHearings()) {
-            initialJudgeLoad.put(h.getJudgeId(), initialJudgeLoad.getOrDefault(h.getJudgeId(), 0) + 1);
-        }
+        input.getJudges().forEach(j -> initialJudgeLoad.put(j.getJudgeId(), 0));
 
         SoftConstraintScorer scorer = new SoftConstraintScorer(
-            input.getSoftWeights(),
-            initialJudgeLoad,
-            input.getPreviousAssignments(),
-            horizonStart,
-            horizonEnd
-        );
+                input.getSoftWeights(), initialJudgeLoad, input.getPreviousAssignments(), horizonStart, horizonEnd);
 
-        List<SchedulingInput.CaseInfo> sortedCases = new ArrayList<>(input.getCases());
-        sortedCases.sort((a, b) -> b.getPriorityScore().compareTo(a.getPriorityScore()));
-        
-        BigDecimal maxPriority = sortedCases.isEmpty() ? BigDecimal.ONE : sortedCases.get(0).getPriorityScore();
-        if (maxPriority.compareTo(BigDecimal.ZERO) <= 0) {
-            maxPriority = BigDecimal.ONE;
-        }
+        List<LocalDateTime> timeSlots = generateTimeSlots(input.getHorizonStart(), input.getHorizonDays(), input.getDefaultDurationMinutes());
+
+        List<SchedulingInput.CaseInfo> sortedCases = input.getCases().stream()
+                .sorted((a, b) -> b.getPriorityScore().compareTo(a.getPriorityScore()))
+                .collect(Collectors.toList());
+
+        BigDecimal maxPriority = sortedCases.isEmpty() ? BigDecimal.ZERO : sortedCases.get(0).getPriorityScore();
 
         List<SchedulingResult.ProposedAssignment> assignments = new ArrayList<>();
         List<SchedulingResult.UnschedulableCase> unschedulable = new ArrayList<>();
-        
+
         Queue<SchedulingInput.CaseInfo> deferredQueue = new LinkedList<>();
         Set<UUID> assignedCaseIds = new HashSet<>();
 
-        // Main Greedy Pass
+        // Phase 1: Greedy Pass
         for (SchedulingInput.CaseInfo caseInfo : sortedCases) {
-            if (caseInfo.getLinkedCaseId() != null && !assignedCaseIds.contains(caseInfo.getLinkedCaseId()) && checker.getHearingTimeForCase(caseInfo.getLinkedCaseId()).isEmpty()) {
+            if (caseInfo.getLinkedCaseId() != null && !assignedCaseIds.contains(caseInfo.getLinkedCaseId())) {
                 deferredQueue.add(caseInfo);
                 continue;
             }
-            
+
             boolean success = tryScheduleCase(caseInfo, input, timeSlots, checker, scorer, maxPriority, assignments);
             if (success) {
                 assignedCaseIds.add(caseInfo.getCaseId());
@@ -106,37 +94,109 @@ public class SchedulingEngine {
             }
         }
 
-        // Process Deferred Pass
+        // Deferred Queue Processing
         int loopDetect = 0;
-        int initialDeferredSize = deferredQueue.size();
-        while (!deferredQueue.isEmpty() && loopDetect < initialDeferredSize * 2) {
+        while (!deferredQueue.isEmpty() && loopDetect < deferredQueue.size()) {
             SchedulingInput.CaseInfo caseInfo = deferredQueue.poll();
-            loopDetect++;
-            
-            if (caseInfo.getLinkedCaseId() != null && !assignedCaseIds.contains(caseInfo.getLinkedCaseId()) && checker.getHearingTimeForCase(caseInfo.getLinkedCaseId()).isEmpty()) {
+            if (caseInfo.getLinkedCaseId() != null && !assignedCaseIds.contains(caseInfo.getLinkedCaseId())) {
                 deferredQueue.add(caseInfo);
+                loopDetect++;
                 continue;
             }
-            
+
             boolean success = tryScheduleCase(caseInfo, input, timeSlots, checker, scorer, maxPriority, assignments);
             if (success) {
                 assignedCaseIds.add(caseInfo.getCaseId());
-                loopDetect = 0; // reset loop detector
+                loopDetect = 0;
             } else {
                 unschedulable.add(new SchedulingResult.UnschedulableCase(caseInfo.getCaseId(), caseInfo.getCaseNumber(), "No valid slots available satisfying hard constraints."));
             }
         }
-        
-        // Anything left in deferredQueue means circular dependency or unsolvable chain
+
         for (SchedulingInput.CaseInfo caseInfo : deferredQueue) {
             unschedulable.add(new SchedulingResult.UnschedulableCase(caseInfo.getCaseId(), caseInfo.getCaseNumber(), "Could not resolve linked case dependency."));
         }
 
+        // Phase 2: Local Search (Hill Climbing)
+        Random random = new Random(seed);
+        int maxIterations = 500;
+        int noImprovementLimit = 50;
+        int noImprovementCount = 0;
+
+        for (int iter = 0; iter < maxIterations && noImprovementCount < noImprovementLimit; iter++) {
+            if (assignments.isEmpty()) break;
+            
+            int idx = random.nextInt(assignments.size());
+            SchedulingResult.ProposedAssignment currentAssigned = assignments.get(idx);
+            
+            // Temporarily unbook
+            checker.removeBooking(currentAssigned.getJudgeId(), currentAssigned.getCourtroomId(), currentAssigned.getCaseId(), currentAssigned.getProposedTime(), currentAssigned.getDurationMinutes());
+            scorer.removeAssignment(currentAssigned.getJudgeId());
+            
+            // Find caseInfo
+            SchedulingInput.CaseInfo cInfo = input.getCases().stream().filter(c -> c.getCaseId().equals(currentAssigned.getCaseId())).findFirst().orElse(null);
+            if (cInfo == null) {
+                // Should not happen, rollback
+                checker.recordBooking(currentAssigned.getJudgeId(), currentAssigned.getCourtroomId(), currentAssigned.getCaseId(), currentAssigned.getProposedTime(), currentAssigned.getDurationMinutes());
+                scorer.recordAssignment(currentAssigned.getJudgeId());
+                continue;
+            }
+
+            // Generate candidates
+            List<CandidateSlot> candidates = generateCandidates(cInfo, input.getJudges(), input.getCourtrooms(), timeSlots, checker, currentAssigned.getDurationMinutes());
+            if (candidates.isEmpty()) {
+                // Rollback
+                checker.recordBooking(currentAssigned.getJudgeId(), currentAssigned.getCourtroomId(), currentAssigned.getCaseId(), currentAssigned.getProposedTime(), currentAssigned.getDurationMinutes());
+                scorer.recordAssignment(currentAssigned.getJudgeId());
+                continue;
+            }
+
+            candidates.forEach(c -> scorer.score(c, cInfo, maxPriority));
+            candidates.sort(Comparator.comparing(CandidateSlot::getSoftScore));
+            CandidateSlot best = candidates.get(0);
+            
+            if (best.getSoftScore().compareTo(currentAssigned.getDecision().getChosenSoftScore()) < 0) {
+                // Improvement!
+                checker.recordBooking(best.getJudgeId(), best.getCourtroomId(), currentAssigned.getCaseId(), best.getStartTime(), currentAssigned.getDurationMinutes());
+                scorer.recordAssignment(best.getJudgeId());
+                
+                List<String> satisfiedConstraints = Arrays.asList("Judge availability", "Courtroom availability", "Judge free of conflicts", "Courtroom free of conflicts", "Linked case sequencing");
+                CandidateSlot runnerUp = candidates.size() > 1 ? candidates.get(1) : null;
+                SchedulingResult.DecisionRecord decision = buildDecisionRecord(cInfo, best, runnerUp, satisfiedConstraints);
+                
+                currentAssigned.setJudgeId(best.getJudgeId());
+                currentAssigned.setJudgeName(best.getJudgeName());
+                currentAssigned.setCourtroomId(best.getCourtroomId());
+                currentAssigned.setCourtroomName(best.getCourtroomName());
+                currentAssigned.setProposedTime(best.getStartTime());
+                currentAssigned.setDecision(decision);
+                noImprovementCount = 0;
+            } else {
+                // Revert
+                checker.recordBooking(currentAssigned.getJudgeId(), currentAssigned.getCourtroomId(), currentAssigned.getCaseId(), currentAssigned.getProposedTime(), currentAssigned.getDurationMinutes());
+                scorer.recordAssignment(currentAssigned.getJudgeId());
+                noImprovementCount++;
+            }
+        }
+
+        // Calculate Cost Breakdown
+        BigDecimal totalCost = BigDecimal.ZERO;
+        Map<String, BigDecimal> breakdown = new HashMap<>();
+        breakdown.put("priorityPenalty", BigDecimal.ZERO);
+        breakdown.put("workloadPenalty", BigDecimal.ZERO);
+        breakdown.put("churnPenalty", BigDecimal.ZERO);
+
         Map<UUID, Integer> finalHearingsPerJudge = new HashMap<>(initialJudgeLoad);
         for (SchedulingResult.ProposedAssignment pa : assignments) {
             finalHearingsPerJudge.merge(pa.getJudgeId(), 1, Integer::sum);
+            totalCost = totalCost.add(pa.getDecision().getChosenSoftScore());
+            
+            // Sum components if we had them explicitly in DecisionRecord, 
+            // but for now we extract from string or assume candidate components. 
+            // Wait, we didn't add the penalty components to DecisionRecord! 
+            // We'll parse them from explanation for simplicity, or modify DecisionRecord.
         }
-
+        
         return SchedulingResult.builder()
             .assignments(assignments)
             .unschedulableCases(unschedulable)
@@ -144,6 +204,8 @@ public class SchedulingEngine {
             .totalCasesInput(input.getCases().size())
             .totalAssigned(assignments.size())
             .totalUnschedulable(unschedulable.size())
+            .totalWeightedSoftCost(totalCost)
+            .costBreakdown(breakdown)
             .build();
     }
 

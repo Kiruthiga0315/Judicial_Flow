@@ -72,6 +72,10 @@ public class SoftConstraintScorer {
         BigDecimal finalScore = BigDecimal.valueOf(combinedScore).setScale(4, RoundingMode.HALF_UP);
         candidate.setSoftScore(finalScore);
         
+        candidate.setPriorityPenaltyVal(BigDecimal.valueOf(priorityPenalty * weights.getPriorityOrdering()).setScale(4, RoundingMode.HALF_UP));
+        candidate.setWorkloadPenaltyVal(BigDecimal.valueOf(workloadPenalty * weights.getWorkloadBalance()).setScale(4, RoundingMode.HALF_UP));
+        candidate.setChurnPenaltyVal(BigDecimal.valueOf(churnPenalty * weights.getScheduleChurn()).setScale(4, RoundingMode.HALF_UP));
+        
         String breakdown = String.format(
             "Priority Penalty: %.2f (wt: %.2f), Workload Penalty: %.2f (wt: %.2f), Churn Penalty: %.2f (wt: %.2f)",
             priorityPenalty, weights.getPriorityOrdering(),
@@ -86,6 +90,10 @@ public class SoftConstraintScorer {
     /** Record that a judge has been assigned one more hearing (call after each assignment). */
     public void recordAssignment(UUID judgeId) {
         currentJudgeLoad.merge(judgeId, 1, Integer::sum);
+    }
+
+    public void removeAssignment(UUID judgeId) {
+        currentJudgeLoad.computeIfPresent(judgeId, (k, v) -> v > 0 ? v - 1 : 0);
     }
 
     private double calculatePriorityPenalty(LocalDateTime start, BigDecimal priorityScore, BigDecimal maxPriorityScore) {

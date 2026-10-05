@@ -20,4 +20,7 @@ public class SchedulingConfigDto {
 
     /** Default hearing duration in minutes. Null = use default from config. */
     private Integer defaultDurationMinutes;
+
+    /** Seed for local search to guarantee reproducibility. Null = use default (e.g. 42). */
+    private Long seed;
 }

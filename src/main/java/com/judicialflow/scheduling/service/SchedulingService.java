@@ -81,6 +81,7 @@ public class SchedulingService {
                 ? configDto.getHorizonDays() : config.getHorizonDays();
         int defaultDuration = configDto != null && configDto.getDefaultDurationMinutes() != null
                 ? configDto.getDefaultDurationMinutes() : config.getDefaultHearingDurationMinutes();
+        long seed = configDto != null && configDto.getSeed() != null ? configDto.getSeed() : 42L;
 
         log.info("Triggering scheduling run: horizonDays={}, defaultDuration={}", horizonDays, defaultDuration);
 
@@ -89,6 +90,7 @@ public class SchedulingService {
                 .status(RunStatus.RUNNING)
                 .horizonDays(horizonDays)
                 .defaultDurationMinutes(defaultDuration)
+                .seed(seed)
                 .build();
         run = runRepository.save(run);
 
@@ -100,7 +102,7 @@ public class SchedulingService {
 
             // 3. Run the engine
             SchedulingEngine engine = new SchedulingEngine();
-            SchedulingResult result = engine.solve(input);
+            SchedulingResult result = engine.solve(input, seed);
 
             // 4. Persist proposals and decisions
             List<ProposalResponse> proposalResponses = persistResults(run, result);
@@ -110,6 +112,14 @@ public class SchedulingService {
             run.setCompletedAt(LocalDateTime.now());
             run.setTotalAssigned(result.getTotalAssigned());
             run.setTotalUnschedulable(result.getTotalUnschedulable());
+            run.setTotalWeightedSoftCost(result.getTotalWeightedSoftCost());
+            
+            try {
+                run.setCostBreakdown(objectMapper.writeValueAsString(result.getCostBreakdown()));
+            } catch (Exception e) {
+                log.warn("Could not serialize cost breakdown", e);
+            }
+
             run = runRepository.save(run);
 
             // 6. Build response
@@ -142,6 +152,9 @@ public class SchedulingService {
                     .totalUnschedulable(run.getTotalUnschedulable())
                     .horizonDays(horizonDays)
                     .defaultDurationMinutes(defaultDuration)
+                    .seed(seed)
+                    .totalWeightedSoftCost(result.getTotalWeightedSoftCost())
+                    .costBreakdown(result.getCostBreakdown())
                     .proposals(proposalResponses)
                     .unschedulableCases(unschedulableResponses)
                     .workloadDistribution(workloadDist)

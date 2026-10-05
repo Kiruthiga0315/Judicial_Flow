@@ -28,6 +28,10 @@ public class CandidateSlot {
     @Builder.Default
     private BigDecimal softScore = BigDecimal.ZERO;
 
+    private BigDecimal priorityPenaltyVal;
+    private BigDecimal workloadPenaltyVal;
+    private BigDecimal churnPenaltyVal;
+
     /** Human-readable explanation of how the soft score was computed. */
     private String scoreBreakdown;
 }

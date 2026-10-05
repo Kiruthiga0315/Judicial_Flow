@@ -62,6 +62,15 @@ public class SchedulingRun {
     @Column(name = "default_duration_minutes", nullable = false)
     private int defaultDurationMinutes = 60;
 
+    @Column(name = "seed")
+    private Long seed;
+
+    @Column(name = "total_weighted_soft_cost", precision = 12, scale = 4)
+    private java.math.BigDecimal totalWeightedSoftCost;
+
+    @Column(name = "cost_breakdown", columnDefinition = "TEXT")
+    private String costBreakdown;
+
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 

@@ -168,6 +168,15 @@ public class HardConstraintChecker {
         caseHearingTimes.put(caseId, start);
     }
 
+    public void removeBooking(UUID judgeId, UUID courtroomId, UUID caseId, LocalDateTime start, int durationMinutes) {
+        TimeSlot slot = new TimeSlot(start, start.plusMinutes(durationMinutes));
+        List<TimeSlot> jb = judgeBookings.get(judgeId);
+        if (jb != null) jb.remove(slot);
+        List<TimeSlot> cb = courtroomBookings.get(courtroomId);
+        if (cb != null) cb.remove(slot);
+        caseHearingTimes.remove(caseId);
+    }
+
     /** Get the recorded hearing time for a case (for linked-case lookups). */
     public Optional<LocalDateTime> getHearingTimeForCase(UUID caseId) {
         return Optional.ofNullable(caseHearingTimes.get(caseId));

@@ -28,6 +28,13 @@ public class SchedulingResult {
     private int totalAssigned;
     private int totalUnschedulable;
 
+    /** Total weighted soft cost of all assignments. Lower is better. */
+    private BigDecimal totalWeightedSoftCost;
+
+    /** Breakdown of the total cost by soft constraint. */
+    @Builder.Default
+    private Map<String, BigDecimal> costBreakdown = new HashMap<>();
+
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ProposedAssignment {
         private UUID caseId;

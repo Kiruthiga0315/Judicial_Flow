@@ -34,6 +34,10 @@ public class SchedulingRunResponse {
     private int totalUnschedulable;
     private int horizonDays;
     private int defaultDurationMinutes;
+    private long seed;
+
+    private java.math.BigDecimal totalWeightedSoftCost;
+    private Map<String, java.math.BigDecimal> costBreakdown;
 
     /** All proposed assignments, ordered by proposed time. */
     @Builder.Default
