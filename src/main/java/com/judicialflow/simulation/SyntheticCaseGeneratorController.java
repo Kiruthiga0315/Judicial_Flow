@@ -17,14 +17,22 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
+
 @RestController
 @RequestMapping("/api/dev/generator")
-@RequiredArgsConstructor
 @Slf4j
 public class SyntheticCaseGeneratorController {
 
     private final CaseRepository caseRepository;
-    private final Random random = new Random();
+    private final Random random;
+
+    public SyntheticCaseGeneratorController(
+            CaseRepository caseRepository,
+            @Value("${generator.seed:12345}") long seed) {
+        this.caseRepository = caseRepository;
+        this.random = new Random(seed);
+    }
 
     /*
      * NJDG Approximate Aggregate Calibration:
