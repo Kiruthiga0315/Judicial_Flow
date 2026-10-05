@@ -4,3 +4,20 @@ target/
 .env
 .DS_Store
 *.log
+
+# Standard Java/Maven ignores
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.project
+.classpath
+.settings/
+.vscode/
+
+# Standard macOS ignores
+._*
+.AppleDouble
+.LSOverride
+Icon
