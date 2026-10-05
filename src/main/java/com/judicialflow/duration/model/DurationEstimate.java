@@ -40,6 +40,15 @@ public class DurationEstimate {
     @Column(name = "model_version", nullable = false)
     private String modelVersion;
 
+    @Column(name = "test_mae")
+    private Double testMae;
+
+    @Column(name = "baseline_mae_days")
+    private Double baselineMaeDays;
+
+    @Column(name = "beats_baseline")
+    private Boolean beatsBaseline;
+
     @Column(name = "top_features")
     private String topFeatures;
 

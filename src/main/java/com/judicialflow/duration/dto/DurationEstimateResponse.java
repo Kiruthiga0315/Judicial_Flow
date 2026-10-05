@@ -14,5 +14,8 @@ public class DurationEstimateResponse {
     private String basis;
     private String modelVersion;
     private String topFeatures;
+    private double testMae;
+    private double baselineMaeDays;
+    private boolean beatsBaseline;
     private LocalDateTime computedAt;
 }

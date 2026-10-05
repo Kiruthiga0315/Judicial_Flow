@@ -118,7 +118,7 @@ Instead of a complex ML pipeline, this relies on Ordinary Least Squares computed
 
 When the application boots (or trains on-demand), it splits the `DISPOSED` synthetic historical cases into an **80/20 train/test split**. 
 * **Training:** The model coefficients (intercept, slope) are derived purely from the 80% training set.
-* **Validation (MAE):** The model predicts the duration for the remaining 20% holdout test set, and calculates the **Mean Absolute Error (MAE)**. This test MAE directly determines the bounding box (`minDurationDays`, `maxDurationDays`) around the estimate returned to the client.
+* **Validation (MAE):** The model predicts the duration for the remaining 20% holdout test set, and calculates the **Mean Absolute Error (MAE)**. This test MAE directly determines the typical error band (`minDurationDays`, `maxDurationDays`) around the estimate returned to the client. This error band carries no statistical coverage guarantee.
 
 ### Explainability
 Because we use isolated simple linear regressions per `CaseType`, the influential features driving any given prediction are inherently:
@@ -126,6 +126,8 @@ Because we use isolated simple linear regressions per `CaseType`, the influentia
 2. **Prior Adjournments** (the numerical value input into the selected linear equation).
 
 ### Honest Evaluation & Limitations
-* **Synthetic Data Bias:** The model relies entirely on the synthetic case data generated in Phase 1. Thus, its predictions heavily reflect the data generator's assumptions rather than the dynamics of real-world court dockets.
+* **Synthetic Data Bias:** The model relies entirely on the synthetic case data generated in Phase 2. Thus, its predictions heavily reflect the data generator's assumptions rather than the dynamics of real-world court dockets.
 * **Limited Features:** Because it is a simple linear regression based solely on prior adjournments, it fails to account for complex, non-linear case nuances or dynamically changing judge caseloads.
-* **Insufficient Data Fallbacks:** If a `CaseType` has fewer than 5 historical disposed cases, the system defaults to a generic fallback (180 days ± 90 days) since a robust train/test split is mathematically unfeasible.
+* **Insufficient Data Fallbacks:** If a `CaseType` has fewer than 8 historical disposed cases, the system defaults to a generic fallback (180 days ± 90 days) since a robust train/test split is mathematically unfeasible.
+* **Baseline Validation:** The system compares the regression MAE against a naive mean-predictor baseline. If the regression fails to beat the baseline, it is stated explicitly in the endpoint output.
+* **Feature Leakage (Adjournments):** The model predicts duration based on the *final* adjournment count of disposed cases, but is served using the *current* adjournment count of pending cases. This temporal leakage means the prediction fundamentally assumes the current adjournment count is the final one, and is labeled in the output as "(given adjournments so far)".

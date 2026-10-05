@@ -41,7 +41,7 @@ public class SyntheticCaseGeneratorController {
      *   - Criminal (75%): BAIL (~10%), POCSO (~5%), CRIMINAL_OTHER (~60%)
      *   - Civil (25%): CIVIL (~20%), MATRIMONIAL (~5%)
      * 
-     * - Pendency Duration (Age of case):
+     * - Pendency Duration (Age of case) - Global:
      *   - < 1 year: 30%
      *   - 1-3 years: 30%
      *   - 3-5 years: 17%
@@ -59,7 +59,7 @@ public class SyntheticCaseGeneratorController {
 
         for (int i = 0; i < count; i++) {
             CaseType type = determineCaseType();
-            LocalDate filingDate = determineFilingDate();
+            LocalDate filingDate = determineFilingDate(type);
             
             // Phase 2: Disposal Rates
             CaseStatus status = (random.nextInt(100) < NjdgCalibrationTargets.DISPOSAL_RATE_PERCENTAGE) 
@@ -73,13 +73,23 @@ public class SyntheticCaseGeneratorController {
                 disposedDate = filingDate.plusDays(daysToDisposal);
             }
 
+            int adjournments;
+            if (status == CaseStatus.DISPOSED) {
+                // To make the ML model have some actual signal, we loosely correlate adjournments with total duration.
+                int totalDays = disposedDate != null ? (int) java.time.temporal.ChronoUnit.DAYS.between(filingDate, disposedDate) : 0;
+                adjournments = (totalDays / 60) + random.nextInt(3); 
+            } else {
+                int daysSinceFiling = (int) java.time.temporal.ChronoUnit.DAYS.between(filingDate, LocalDate.now());
+                adjournments = (daysSinceFiling / 60) + random.nextInt(3);
+            }
+
             Case legalCase = Case.builder()
                     .caseNumber("SYN-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                     .caseType(type)
                     .filingDate(filingDate)
                     .currentStatus(status)
                     .disposedDate(disposedDate)
-                    .priorAdjournments(random.nextInt(10)) // random 0-9 adjournments
+                    .priorAdjournments(adjournments)
                     .build();
             
             casesToSave.add(legalCase);
@@ -99,11 +109,44 @@ public class SyntheticCaseGeneratorController {
         return CaseType.MATRIMONIAL;
     }
 
-    private LocalDate determineFilingDate() {
-        int rand = random.nextInt(100);
+    private LocalDate determineFilingDate(CaseType type) {
         LocalDate today = LocalDate.now();
         int daysAgo = 0;
 
+        // Type-specific duration distributions
+        if (type == CaseType.BAIL) {
+            /*
+             * Assumption: No exact published NJDG figure isolates BAIL pendency nationally,
+             * but bail matters are statutorily prioritized for liberty. 
+             * Assumed distribution: 80% within 6 months, 20% 6-12 months.
+             */
+            int rand = random.nextInt(100);
+            if (rand < 80) {
+                daysAgo = random.nextInt(180);
+            } else {
+                daysAgo = 180 + random.nextInt(185);
+            }
+            return today.minusDays(daysAgo);
+        } 
+        
+        if (type == CaseType.POCSO) {
+            /*
+             * Assumption based on POCSO Act mandate: Cases should ideally be disposed within 1 year.
+             * Assumed distribution: 50% < 1 year, 40% 1-3 years, 10% 3+ years.
+             */
+            int rand = random.nextInt(100);
+            if (rand < 50) {
+                daysAgo = random.nextInt(365);
+            } else if (rand < 90) {
+                daysAgo = 365 + random.nextInt(730);
+            } else {
+                daysAgo = 365 * 3 + random.nextInt(730);
+            }
+            return today.minusDays(daysAgo);
+        }
+
+        // Default generic NJDG aggregate for CIVIL, MATRIMONIAL, CRIMINAL_OTHER
+        int rand = random.nextInt(100);
         if (rand < 30) {
             // < 1 year
             daysAgo = random.nextInt(365);
