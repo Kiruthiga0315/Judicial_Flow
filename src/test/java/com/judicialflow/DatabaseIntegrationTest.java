@@ -61,7 +61,7 @@ class DatabaseIntegrationTest {
                 .caseNumber("TEST-DB-001")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .assignedJudge(savedJudge)
                 .build();
         
@@ -76,7 +76,7 @@ class DatabaseIntegrationTest {
                 .caseNumber("TEST-DB-001") // Duplicate!
                 .caseType(CaseType.BAIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .build();
         
         assertThrows(DataIntegrityViolationException.class, () -> {
@@ -91,7 +91,7 @@ class DatabaseIntegrationTest {
                 .caseNumber("TEST-DB-002")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .assignedJudge(fakeJudge)
                 .build();
 

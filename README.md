@@ -1,133 +1,153 @@
-# JudicialFlow
+# JudicialFlow: Intelligent Court Hearing Scheduling & Decision Support
 
-A Java / Spring Boot decision-support system that optimizes trial court hearing scheduling.
+> **MANDATORY DISCLAIMER**: All performance figures, benchmark reports, and demonstration datasets in this repository are simulation outputs on synthetic data calibrated to approximate National Judicial Data Grid (NJDG) aggregates under stated mathematical assumptions. They are not empirical observations of live court dockets and do not represent evidence of real-world court impact.
 
-## Prerequisites
+---
 
-- Docker Desktop (or Docker Engine)
-- JDK 17+
-- Maven
+## 1. Overview & Architecture
 
-## Local Development Setup
+JudicialFlow is a production-grade, Spring Boot and React decision-support platform designed to optimize trial court hearing scheduling in Indian district and taluka courts.
 
-1. **Start PostgreSQL**: We use Docker to run a local PostgreSQL instance. Run the following command from the root of the `judicialflow` directory:
+Rather than acting as an opaque black box, JudicialFlow combines:
+- **Transparent Multi-Criteria Priority Scoring**: Transparent linear weighting of statutory urgency, case aging, and prior adjournments.
+- **Weighted Constraint-Satisfaction Scheduling Engine**: Hard constraint enforcement (no double bookings, bench availability) with soft penalty minimization (priority ordering, judge workload balance, schedule churn).
+- **Explainable Decision Logs**: Audit trails tracking runner-up candidates and exact reasons why alternative time slots were rejected.
+- **Two-Role Database Hardening**: Database-level role separation guaranteeing immutability of audit logs.
+
+```mermaid
+graph TD
+    Client[React Vite Frontend<br/>Port 5173] -->|HTTP / REST| API[Spring Boot REST Backend<br/>Port 8081]
+    
+    subgraph Spring Boot Backend
+        Auth[Spring Security RBAC<br/>ADMIN, REGISTRAR, JUDGE] --> Controllers[REST Controllers]
+        Controllers --> Engine[Weighted Constraint<br/>Scheduling Engine]
+        Controllers --> Scorer[Priority Score Calculator]
+        Controllers --> Estimator[Duration Estimator<br/>Linear Regression vs Baseline]
+        Controllers --> Batch[Nightly Rescheduling<br/>Batch Job]
+        Batch --> Notification[Hearing Notice Service]
+    end
+    
+    Notification -->|SMTP :1025| MailHog[MailHog Inbox<br/>Port 8025]
+    Engine -->|App DML: jfuser| DB[(PostgreSQL 15<br/>Port 5433)]
+    Flyway[Flyway Migrations] -->|DDL Owner: jfowner| DB
+```
+
+---
+
+## 2. Roles, Authentication & Dev Credentials
+
+> [!WARNING]
+> **DEVELOPMENT PROFILE ONLY**: Dev user credentials and pre-seeded accounts are active strictly under the Spring Boot `dev` profile (`-Dspring-boot.run.profiles=dev`). Never enable the dev profile in production environments or expose these credentials on public networks.
+
+### Pre-Seeded Application Accounts (Dev Profile)
+
+| Username | Password | Role | Permitted Capabilities |
+|---|---|---|---|
+| `admin` | `admin123` | `ROLE_ADMIN` | Full administrative control, batch jobs, simulation benchmarks, audit log inspection. |
+| `registrar` | `registrar123` | `ROLE_REGISTRAR` | Case docket management, schedule proposal review, approval/rejection, manual slot override. |
+| `judge` | `judge123` | `ROLE_JUDGE` | Read-only access to judge dockets, daily cause lists, case drawer. Write actions return `403 Forbidden`. |
+
+### Database Roles & Privilege Separation
+
+The PostgreSQL database enforces two distinct roles configured in `docker/init-db/01-init-roles.sql` and migration `V19`:
+
+1. **Migration Owner (`jfowner` / `jfpass`)**:
+   - Owns all tables, sequences, and schemas.
+   - Executes Flyway DDL migrations.
+2. **Application User (`jfuser` / `jfpass`)**:
+   - Restricted to DML operations (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) on standard tables.
+   - **Audit Immutability Enforced**: The application user has **zero** `UPDATE`, `DELETE`, `TRUNCATE`, or `TRIGGER` privileges on `audit_log_entries` and does not own the table. Attempting `ALTER TABLE ... DISABLE TRIGGER` throws `must be owner of table`.
+
+---
+
+## 3. How to Run
+
+### Step 1: Start PostgreSQL and MailHog via Docker Compose
+From the `judicialflow` directory:
+```bash
+docker compose up -d
+```
+- PostgreSQL 15 runs on `localhost:5433`.
+- MailHog Web UI is accessible at [http://localhost:8025](http://localhost:8025).
+
+### Step 2: Start Spring Boot Backend (Dev Profile)
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+- API starts at [http://localhost:8081](http://localhost:8081).
+- Swagger UI / OpenAPI docs: [http://localhost:8081/swagger-ui/index.html](http://localhost:8081/swagger-ui/index.html).
+
+### Step 3: Start React Frontend
+From the `frontend` directory:
+```bash
+npm install
+npm run dev
+```
+- Dashboard opens at [http://localhost:5173](http://localhost:5173).
+
+### Step 4: Run Simulation & Benchmarks
+
+1. **Quick Simulation Mode (3 seeds, 4 scenarios, no sensitivity, ~65 seconds)**:
    ```bash
-   docker compose up -d
+   mvn test -Dtest=BenchmarkRemeasurementTest
    ```
-   This starts the DB on the configured `DB_PORT` (default `5433`).
-
-2. **Run the Application**: 
+   Or via Spring Boot CLI:
    ```bash
-   mvn spring-boot:run
+   mvn spring-boot:run -Dspring-boot.run.arguments="--simulation --quick"
    ```
-   The application will connect to the PostgreSQL instance and automatically apply the schema migrations via Flyway.
+   Generates `reports/simulation-report.html`, `reports/simulation-report.json`, and `reports/simulation-summary.md`.
 
-3. **Run the Tests**:
-   ```bash
-   mvn clean test
-   ```
-   Integration tests run against a real PostgreSQL 15 container managed via Testcontainers.
+2. **Full Research Benchmark**:
+   - **Full Scenarios without Sensitivity (10 seeds, 4 scenarios)**: ~207 seconds (~3.5 minutes).
+   - **Sensitivity Analysis Sweep (5 seeds, 8 variations, 2 scenarios)**: ~402 seconds (~6.7 minutes).
+   - Full reports written to `reports/`.
 
-## Environment Variables
+---
 
-- `SERVER_PORT`: Application port (default: 8081)
-- `DB_HOST`: Host for postgres (default: localhost)
-- `DB_PORT`: Port for postgres (default: 5433)
-- `DB_NAME`: Database name (default: judicialflow)
-- `DB_USER`: Database user (default: jfuser)
-- `DB_PASSWORD`: Database password (default: jfpass)
-- `generator.seed`: Seed for deterministic case generation (default: 12345)
+## 4. Test Execution & Verification
 
-## Synthetic Case Generator
-
-The system uses purely synthetic data calibrated to match approximate published NJDG (National Judicial Data Grid) aggregate statistics. No real case or individual data is used. The targets are illustrative approximations of published NJDG aggregates, not exact figures. We use a deterministic generator that targets these approximate NJDG statistics within a ±1.5 points tolerance.
-
-To generate a sample synthetic caseload, trigger the dev-only REST endpoint once the application is running:
-
+### Backend Tests (Maven)
+The test suite runs against PostgreSQL Testcontainers with role separation:
 ```bash
-curl -X POST "http://localhost:8081/api/dev/generator/cases?count=100"
+mvn clean test
 ```
-This will insert 100 cases into the database with case types and pendency distributions matching the NJDG aggregates.
+All integration and unit tests are executed.
 
-## API Documentation (Swagger UI)
-
-When the application is running, the interactive OpenAPI Swagger UI and schema are available at:
-- **Swagger UI**: [http://localhost:8081/swagger-ui/index.html](http://localhost:8081/swagger-ui/index.html)
-- **OpenAPI JSON**: [http://localhost:8081/v3/api-docs](http://localhost:8081/v3/api-docs)
-
-## Phase 4: Scheduling Engine
-
-### Algorithm
-
-The scheduling engine uses a **greedy weighted assignment with local-search repair** algorithm:
-
-1. **Greedy Pass**: Cases are sorted by priority score (descending). For each case, all possible (judge × courtroom × time slot) candidates are generated, filtered by hard constraints, and scored by soft constraints. The lowest-penalty candidate is selected.
-
-2. **Deferred Queue**: Cases with linked-case dependencies are deferred until their prerequisite is scheduled, then processed.
-
-3. **Complexity**: O(C × J × R × T) where C = cases, J = judges, R = courtrooms, T = time slots.
-
-### Hard Constraints (never violated)
-- No judge double-booking
-- No courtroom double-booking
-- Judge availability window enforcement
-- Courtroom availability window enforcement
-- Linked case sequencing (prerequisite must be scheduled first)
-
-### Soft Constraints (weighted optimization)
-- **Priority ordering** (weight 0.5): Higher-priority cases get earlier slots
-- **Workload balance** (weight 0.3): Even distribution across judges
-- **Schedule churn** (weight 0.2): Minimize changes from previous run
-
-### API Endpoints
-
-**Trigger a scheduling run** (returns proposals, does NOT auto-commit):
+### Frontend Tests & Type Checking (npm)
+From the `frontend` directory:
 ```bash
-curl -X POST http://localhost:8081/api/scheduling/run \
-  -H "Content-Type: application/json" \
-  -d '{"horizonDays": 5, "defaultDurationMinutes": 60}'
+# Run unit tests via Vitest
+npm test -- --run
+
+# Run ESLint
+npm run lint
+
+# Check TypeScript types
+npx tsc --noEmit
+
+# Production build
+npm run build
 ```
 
-**Retrieve a past run:**
-```bash
-curl http://localhost:8081/api/scheduling/runs/{runId}
-```
+---
 
-**Manual override:**
-```bash
-curl -X POST http://localhost:8081/api/scheduling/override \
-  -H "Content-Type: application/json" \
-  -d '{"caseId":"...","judgeId":"...","courtroomId":"...","scheduledTime":"2026-09-21T10:00:00","reason":"Registrar requested","overriddenBy":"Registrar Kumar"}'
-```
+## 5. System Limitations & Findings Summary
 
-### Decision Log
+For full mathematical methodology and empirical analysis, consult [docs/limitations.md](docs/limitations.md) and [docs/simulation-methodology.md](docs/simulation-methodology.md).
 
-Every assignment includes an explainability record showing:
-- **Chosen slot**: judge, courtroom, time, soft score
-- **Runner-up**: the next-best option that was passed over
-- **Rejection reason**: why the runner-up scored worse
-- **Constraints satisfied**: list of hard constraints verified
+Key empirical findings from the 10-seed simulation benchmark:
+1. **Outperforms Type-Blind FCFS**: The weighted scheduling engine reduces statutory priority delay across all load conditions (-1.78 days at load 0.70 to -36.43 days at load 1.60 vs FCFS).
+2. **Does NOT Outperform FCFS-Tiered on Statutory Delay**: Rigid priority tiering achieves lower statutory delay (+3.10 to +6.31 days worse for engine vs tiered).
+3. **Costs Non-Priority Cases More**: Balancing age, workload, and soft penalties results in non-priority cases (CIVIL, CRIMINAL_OTHER) waiting longer than under strict tiered or type-blind queues.
+4. **Aging Cap Dynamics**: Under standard weights, newly filed BAIL cases (score 52.0) cannot be overtaken by aged CIVIL cases (score 8.0 + max 25.0 aging = 33.0) purely via elapsed time.
+5. **Core Value**: Configurable, explainable, and tamper-resistant scheduling decision support.
 
-## Phase 5: Case Duration Estimator
+---
 
-The Case Duration Estimator predicts the total expected resolution time (in days) from filing to disposal for a given case.
+## 6. Project Documentation Index
 
-### Methodology and Train/Test Validation
-We implement a **Simple Linear Regression** grouped by `CaseType`, using `priorAdjournments` as the sole explanatory feature (X) and total days to disposal as the target (Y). 
-Instead of a complex ML pipeline, this relies on Ordinary Least Squares computed in plain Java to guarantee total interpretability.
-
-When the application boots (or trains on-demand), it splits the `DISPOSED` synthetic historical cases into an **80/20 train/test split**. 
-* **Training:** The model coefficients (intercept, slope) are derived purely from the 80% training set.
-* **Validation (MAE):** The model predicts the duration for the remaining 20% holdout test set, and calculates the **Mean Absolute Error (MAE)**. This test MAE directly determines the typical error band (`minDurationDays`, `maxDurationDays`) around the estimate returned to the client. This error band carries no statistical coverage guarantee.
-
-### Explainability
-Because we use isolated simple linear regressions per `CaseType`, the influential features driving any given prediction are inherently:
-1. **Case Type** (which dictates *which* regression model is applied).
-2. **Prior Adjournments** (the numerical value input into the selected linear equation).
-
-### Honest Evaluation & Limitations
-* **Synthetic Data Bias:** The model relies entirely on the synthetic case data generated in Phase 2. Thus, its predictions heavily reflect the data generator's assumptions rather than the dynamics of real-world court dockets.
-* **Limited Features:** Because it is a simple linear regression based solely on prior adjournments, it fails to account for complex, non-linear case nuances or dynamically changing judge caseloads.
-* **Insufficient Data Fallbacks:** If a `CaseType` has fewer than 8 historical disposed cases, the system defaults to a generic fallback (180 days ± 90 days) since a robust train/test split is mathematically unfeasible.
-* **Baseline Validation:** The system compares the regression MAE against a naive mean-predictor baseline. If the regression fails to beat the baseline, it is stated explicitly in the endpoint output.
-* **Feature Leakage (Adjournments):** The model predicts duration based on the *final* adjournment count of disposed cases, but is served using the *current* adjournment count of pending cases. This temporal leakage means the prediction fundamentally assumes the current adjournment count is the final one, and is labeled in the output as "(given adjournments so far)".
+- [Live Demonstration Script (docs/demo-script.md)](docs/demo-script.md)
+- [System Limitations & Trade-Offs (docs/limitations.md)](docs/limitations.md)
+- [Simulation & Validation Methodology (docs/simulation-methodology.md)](docs/simulation-methodology.md)
+- [Duration Estimator Specification (docs/duration-estimator.md)](docs/duration-estimator.md)
+- [Scheduling Engine Architecture (docs/scheduling-engine.md)](docs/scheduling-engine.md)

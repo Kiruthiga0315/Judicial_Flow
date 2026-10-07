@@ -7,7 +7,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:judicialflow}
     username: ${DB_USER:jfuser}
-    password: ${DB_PASSWORD:jfpass}
+    password: ${DB_PASSWORD:}
   jpa:
     hibernate:
       ddl-auto: validate # Use validate, rely on Flyway
@@ -18,12 +18,30 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:judicialflow}
+    user: ${FLYWAY_USER:${DB_OWNER_USER:jfowner}}
+    password: ${FLYWAY_PASSWORD:${DB_OWNER_PASSWORD:}}
   batch:
+    job:
+      enabled: false # Do not run all batch jobs on application startup
     jdbc:
       initialize-schema: always # Initialize spring batch schema automatically
   mail:
-    host: localhost
-    port: 1025 # Mailhog or similar for local
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1025}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:false}
+
+notification:
+  reprioritization-digest:
+    score-delta-threshold: ${DIGEST_SCORE_DELTA_THRESHOLD:5.0}
+
+court:
+  zone-id: ${COURT_ZONE_ID:Asia/Kolkata}
 
 generator:
   enabled: ${GENERATOR_ENABLED:false}
@@ -56,6 +74,11 @@ priority:
     max-adjournment-contribution: 30
     # Flat bonus when the case is linked to another open case.
     linked-case-bonus: 10
+    # Statutory deadline bonus: max bonus escalating as deadline approaches or expires.
+    max-deadline-bonus: 30.00
+  retention:
+    # Retention period in days for historical priority scores (older scores pruned while keeping latest)
+    days: 30
 
 # -------------------------------------------------------------------
 # Phase 4: Scheduling Engine
@@ -78,4 +101,79 @@ scheduling:
     workload-balance: 0.3
     # Minimise changes versus the previous scheduling run.
     schedule-churn: 0.2
+  nightly-job:
+    cron: "0 0 2 * * ?" # 02:00 AM nightly
+    enabled: true
+
+# -------------------------------------------------------------------
+# Phase 8: Simulation & Validation Configuration
+# Parameters for running discrete-event simulation comparing FCFS vs JudicialFlow engine.
+# Parameters not directly taken from NJDG aggregates are labeled ASSUMPTION.
+# -------------------------------------------------------------------
+simulation:
+  enabled: true
+  horizon-days: 90                  # Total simulated business days (>=90 weekdays)
+  cadence-days: 5                   # Business days per scheduling run
+  judges-count: 8                   # Simulated bench capacity
+  courtrooms-count: 5               # Simulated physical courtroom capacity
+  slots-per-day-per-room: 7         # 7 slots (09:00 - 17:00 IST with 1h recess, 60m duration)
+  default-duration-minutes: 60
+  threshold-t-days: 14              # Statutory priority threshold T (calendar days)
+  sensitivity-thresholds: [7, 14, 30]
+  backlog-size: 350                 # Initial case backlog ensuring non-empty queue at start
+  default-seeds: [42, 101, 203, 305, 407, 509, 611, 713, 815, 917] # 10 seeds minimum
+  quick-seeds: [42, 101, 203]
+  scenarios:
+    moderate:
+      name: "Moderate Load (Offered Load ~0.7)"
+      daily-arrival-rate: 13.5       # lambda = 13.5 -> Offered Load = (13.5 * 1.8182) / 35 = 0.70
+      capacity-multiplier: 1.0
+      target-offered-load: 0.70
+    balanced:
+      name: "Balanced (Offered Load ~1.0)"
+      daily-arrival-rate: 19.25      # lambda = 19.25 -> Offered Load = (19.25 * 1.8182) / 35 = 1.00
+      capacity-multiplier: 1.0
+      target-offered-load: 1.00
+    overloaded:
+      name: "Overloaded (Offered Load ~1.3)"
+      daily-arrival-rate: 25.0       # lambda = 25.0 -> Offered Load = (25.0 * 1.8182) / 35 = 1.30
+      capacity-multiplier: 1.0
+      target-offered-load: 1.30
+    severe_overload:
+      name: "Severe Overload (Offered Load ~1.6)"
+      daily-arrival-rate: 30.8       # lambda = 30.8 -> Offered Load = (30.8 * 1.8182) / 35 = 1.60
+      capacity-multiplier: 1.0
+      target-offered-load: 1.60
+  assumptions:
+    # ASSUMPTION: 45% probability that a scheduled hearing concludes with an adjournment rather than final disposal.
+    adjournment-probability: 0.45
+    # ASSUMPTION: Minimum cooling gap of 7 calendar days before an adjourned case is eligible for re-scheduling.
+    minimum-adjournment-gap-days: 7
+    # ASSUMPTION: Maximum allowable hearings per case before forced disposal (finite case lifecycle model).
+    max-hearings-per-case: 5
+    # ASSUMPTION: In FCFS baseline, adjourned cases retain their original filing date when re-queued for scheduling.
+    fcfs-preserves-filing-date: true
+
+management:
+  health:
+    mail:
+      enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.judicialflow.priority.service.PriorityScoreCalculator: WARN
+    com.judicialflow.simulation.validation.SimulationRunnerService: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    password: ${DB_PASSWORD:jfpass}
+  flyway:
+    password: ${FLYWAY_PASSWORD:${DB_OWNER_PASSWORD:jfownerpass}}
+
+
 

@@ -153,4 +153,91 @@ class DurationEstimatorServiceTest {
         assertThat(r1.getPredictedDurationDays()).isEqualTo(r2.getPredictedDurationDays());
         assertThat(r1.getTestMae()).isEqualTo(r2.getTestMae());
     }
+
+    @Test
+    void testMultiTypeFixture_deliberateInsufficientDataAndBaselineComparison() {
+        List<Case> cases = new ArrayList<>();
+
+        // 1. BAIL: 12 cases with strong linear correlation (adjournment * 20 days) -> Beats baseline
+        for (int i = 1; i <= 12; i++) {
+            Case c = new Case();
+            c.setId(UUID.randomUUID());
+            c.setCaseType(CaseType.BAIL);
+            c.setCurrentStatus(CaseStatus.DISPOSED);
+            c.setPriorAdjournments(i);
+            c.setFilingDate(LocalDate.now().minusDays(20L * i));
+            c.setDisposedDate(LocalDate.now());
+            cases.add(c);
+        }
+
+        // 2. CRIMINAL_OTHER: 35 cases where regression does not beat baseline
+        for (int i = 1; i <= 35; i++) {
+            Case c = new Case();
+            c.setId(UUID.randomUUID());
+            c.setCaseType(CaseType.CRIMINAL_OTHER);
+            c.setCurrentStatus(CaseStatus.DISPOSED);
+            c.setPriorAdjournments(i % 5);
+            c.setFilingDate(LocalDate.now().minusDays(50L * i));
+            c.setDisposedDate(LocalDate.now());
+            cases.add(c);
+        }
+
+        // 3. POCSO: 3 cases (< THRESHOLD_FALLBACK = 8) -> Deliberate insufficient data
+        for (int i = 1; i <= 3; i++) {
+            Case c = new Case();
+            c.setId(UUID.randomUUID());
+            c.setCaseType(CaseType.POCSO);
+            c.setCurrentStatus(CaseStatus.DISPOSED);
+            c.setPriorAdjournments(i);
+            c.setFilingDate(LocalDate.now().minusDays(40L * i));
+            c.setDisposedDate(LocalDate.now());
+            cases.add(c);
+        }
+
+        when(caseRepository.findAll()).thenReturn(cases);
+
+        // Train models
+        durationEstimatorService.trainModels();
+
+        // Check BAIL: should beat baseline and report sample count
+        Case bailTarget = new Case();
+        bailTarget.setId(UUID.randomUUID());
+        bailTarget.setCaseType(CaseType.BAIL);
+        bailTarget.setPriorAdjournments(3);
+
+        DurationEstimateResponse bailResp = durationEstimatorService.estimateForCase(bailTarget);
+        assertThat(bailResp.isBeatsBaseline()).isTrue();
+        assertThat(bailResp.getTrainingSampleCount()).isEqualTo(11);
+        assertThat(bailResp.getTestMae()).isLessThan(bailResp.getBaselineMaeDays());
+        assertThat(bailResp.getBasis()).contains("beats Baseline MAE");
+
+        // Check CRIMINAL_OTHER: did not beat baseline -> must fall back to naive per-type-mean baseline
+        Case crimTarget = new Case();
+        crimTarget.setId(UUID.randomUUID());
+        crimTarget.setCaseType(CaseType.CRIMINAL_OTHER);
+        crimTarget.setPriorAdjournments(2);
+
+        DurationEstimateResponse crimResp = durationEstimatorService.estimateForCase(crimTarget);
+        assertThat(crimResp.isBeatsBaseline()).isFalse();
+        assertThat(crimResp.getTrainingSampleCount()).isEqualTo(28); // 80% of 35
+        assertThat(crimResp.getBasis()).contains("keeping type on naive mean baseline");
+
+        // Check POCSO: insufficient data -> fallback
+        Case pocsoTarget = new Case();
+        pocsoTarget.setId(UUID.randomUUID());
+        pocsoTarget.setCaseType(CaseType.POCSO);
+        pocsoTarget.setPriorAdjournments(1);
+
+        DurationEstimateResponse pocsoResp = durationEstimatorService.estimateForCase(pocsoTarget);
+        assertThat(pocsoResp.getPredictedDurationDays()).isEqualTo(180);
+        assertThat(pocsoResp.getBasis()).contains("fallback, insufficient data");
+
+        // Verify model evaluations map
+        var evals = durationEstimatorService.getModelEvaluations();
+        assertThat(evals).containsKey(CaseType.BAIL);
+        assertThat(evals).containsKey(CaseType.CRIMINAL_OTHER);
+        assertThat(evals.get(CaseType.BAIL).isBeatsBaseline()).isTrue();
+        assertThat(evals.get(CaseType.CRIMINAL_OTHER).isUsingBaseline()).isTrue();
+        assertThat(evals.get(CaseType.POCSO)).isNull(); // Insufficient data
+    }
 }

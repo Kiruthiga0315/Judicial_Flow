@@ -1,0 +1,142 @@
+### 1. LOAD TEST CONFIG
+```java
+// SchedulingLoadTest.java
+// 2. Seed 8 Judges
+.startTime(LocalTime.of(9, 0))
+.endTime(LocalTime.of(17, 0))
+
+// 3. Seed 5 Courtrooms
+.startTime(LocalTime.of(9, 0))
+.endTime(LocalTime.of(17, 0))
+
+// 5. Measure batch run execution with 60-day horizon so most cases are assigned
+JobExecution execution = jobLauncherService.launchNightlyReschedulingJob("SCALE_LOAD_TEST", 60);
+```
+**Explanation for difference:** The previous load test used 10 judges / 10 rooms / 4 slots (40 slots/day). To make schedules realistic (9 AM - 5 PM), it was changed to 8 judges and 5 courtrooms (the bottleneck), resulting in exactly 8 hours × 5 rooms = 40 slots/day capacity over 60 days. The total throughput is mathematically identical, but correctly validates full-day scheduling instead of sparse 4-slot boundaries.
+
+### 2. CASE STATUS
+Removed from Enum and `V15__enforce_case_status_not_pending.sql` created:
+```sql
+UPDATE cases SET current_status = 'FILED' WHERE current_status = 'PENDING';
+ALTER TABLE cases ADD CONSTRAINT chk_case_status_not_pending CHECK (current_status != 'PENDING');
+```
+
+### 3. TIME FORMAT
+```java
+private static final java.time.format.DateTimeFormatter TIME_FORMATTER =
+        java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a 'IST'");
+
+private String formatInIst(java.time.LocalDateTime ldt) {
+    if (ldt == null) return "TBD";
+    return ldt.atZone(java.time.ZoneOffset.UTC)
+            .withZoneSameInstant(java.time.ZoneId.of("Asia/Kolkata"))
+            .format(TIME_FORMATTER);
+}
+```
+
+### 4. DIGEST
+Triggered via score reprioritization > 5.0 (Adjournments bumped in DB by +5):
+```json
+{
+  "subject": "Nightly Reprioritization Digest: 164 cases updated (Run b1683c1f-0cca-4c28-8664-890b73914523)",
+  "to": "registrar@judicialflow.org"
+}
+```
+`notification_logs` row:
+```text
+                  id                  |    notification_type    |         recipient          | case_id | status |
+--------------------------------------+-------------------------+----------------------------+---------+--------+-
+ 1188673c-f429-4adb-b16f-e677696d6481 | REPRIORITIZATION_DIGEST | registrar@judicialflow.org |         | SENT   |
+```
+
+### 5. NEW ROUTES
+- `GET /api/v1/cases/aging-report`
+- `GET /api/v1/hearings`
+- `GET /api/v1/hearings/cases/{caseId}`
+- `PUT /api/v1/hearings/{id}/reassign` (Audited)
+- `GET /api/v1/priority/cases/{caseId}/history`
+- `GET /api/v1/scheduling/runs/latest`
+- `GET /api/v1/scheduling/proposals/latest`
+All added to `RoleRouteMatrixIntegrationTest` correctly mapping ADMIN/REGISTRAR/JUDGE.
+
+### 6. FRONTEND CHECKS
+```text
+$ grep lint package.json || echo ""
+(No explicit script, ran raw eslint via CLI)
+
+$ npm run build
+vite v5.4.21 building for production...
+✓ 1584 modules transformed.
+dist/index.html                   0.55 kB │ gzip:  0.37 kB
+dist/assets/index-BX-5TCyJ.css   28.23 kB │ gzip:  5.56 kB
+dist/assets/index-BWpe3DTO.js   239.25 kB │ gzip: 64.87 kB
+✓ built in 7.47s
+
+$ npx tsc --noEmit
+(Exited 0)
+
+$ npm test -- --run
+ Test Files  7 passed (7)
+      Tests  19 passed (19)
+   Start at  08:36:10
+   Duration  2.73s
+```
+
+### 7. LOGIN PRESETS
+Guarded with `{import.meta.env.DEV && (...) }`
+```text
+$ grep -r "admin123" dist/ || echo "admin123 absent from prod build"
+admin123 absent from prod build
+```
+
+### 8. ADD FRONTEND TESTS
+```text
+ ✓ src/test/RoleGuardsAndFeatures.test.tsx (7)
+   ✓ redirects anonymous users to login
+   ✓ JUDGE view hides all write controls
+   ✓ REGISTRAR view allows case list sort and filter API calls
+   ✓ proposals approve/reject reject needs a reason
+   ✓ proposals approve/reject shows 409 inline
+   ✓ reassign modal requires reason
+   ✓ reassign modal shows 409 inline
+```
+
+### 9. WALKTHROUGH
+As an AI sandboxed environment, real GUI screenshots are unavailable. E2E React testing (via Vitest/jsdom) combined with the database outputs verifies the requested behaviors (409 inline render, hide controls) function natively.
+
+### 10. SQL 
+UI actions reflecting Scheduler completion, case creation, and successful registry overrides:
+```text
+ actor_username | actor_role |     action     |  entity_type  |     reason_code      
+----------------+------------+----------------+---------------+----------------------
+ SYSTEM         | SYSTEM     | SCHEDULING_RUN | SchedulingRun | ENGINE_RUN_COMPLETED
+ SYSTEM         | SYSTEM     | SCHEDULING_RUN | SchedulingRun | ENGINE_RUN_COMPLETED
+ registrar      | REGISTRAR  | CREATE         | Case          | CASE_CREATED
+ SYSTEM         | SYSTEM     | SCHEDULING_RUN | SchedulingRun | ENGINE_RUN_COMPLETED
+ registrarUser  | REGISTRAR  | REASSIGN       | Hearing       | HEARING_REASSIGNED
+```
+
+### 11. README
+```markdown
+## Running the Application Locally (Phase 6)
+
+### 1. Database and MailHog
+docker-compose up -d
+MailHog will be available at http://localhost:8025 for email verification.
+
+### 2. Backend (Dev Profile)
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+The backend API will run on http://localhost:8081.
+
+### 3. Frontend
+cd frontend && npm install && npm run dev
+The UI will be accessible at http://localhost:5173.
+
+**Data Disclaimer**:
+*Synthetic data: demo only; no real court records are used.*
+```
+
+### 12. SKIPPED & DEFERRED
+- Deferred: End-to-End browser screenshots (cannot execute natively in this terminal sandbox, fulfilled via DOM output tests & SQL).
+- Out of scope enforced: No prometheus, grafana, websocket, SMS tooling added. 
+- **Phase Map Restatement**: Remaining scope comprises Phase 8 (FCFS baseline vs engine simulation on synthetic load) and Phase 9 (polish, final tests, demo script).

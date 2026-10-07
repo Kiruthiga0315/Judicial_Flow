@@ -14,11 +14,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.hamcrest.Matchers.*;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
 /**
  * Integration tests for the Phase 4 scheduling REST API.
  * Uses Testcontainers (via AbstractIntegrationTest) with real PostgreSQL.
  */
 @Transactional
+@WithMockUser(roles = "REGISTRAR")
 class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -30,12 +33,35 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private CourtroomRepository courtroomRepository;
 
+    @Autowired
+    private com.judicialflow.common.HearingRepository hearingRepository;
+
+    @Autowired
+    private com.judicialflow.scheduling.repository.SchedulingProposalRepository proposalRepository;
+
+    @Autowired
+    private com.judicialflow.scheduling.repository.SchedulingRunRepository runRepository;
+
+    @Autowired
+    private com.judicialflow.priority.repository.PriorityScoreRepository priorityScoreRepository;
+
+    @org.junit.jupiter.api.BeforeEach
+    void cleanDatabase() {
+        hearingRepository.deleteAll();
+        proposalRepository.deleteAll();
+        runRepository.deleteAll();
+        priorityScoreRepository.deleteAll();
+        caseRepository.deleteAll();
+        judgeRepository.deleteAll();
+        courtroomRepository.deleteAll();
+    }
+
     // =========================================================================
     // Helper methods
     // =========================================================================
 
     private String createJudge(String name) throws Exception {
-        MvcResult res = mockMvc.perform(post("/api/judges")
+        MvcResult res = mockMvc.perform(post("/api/v1/judges")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"" + name + "\", \"specialization\": \"Civil\"}"))
                 .andExpect(status().isCreated())
@@ -52,14 +78,14 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
                     {"dayOfWeek": "THURSDAY", "startTime": "09:00", "endTime": "17:00"},
                     {"dayOfWeek": "FRIDAY", "startTime": "09:00", "endTime": "17:00"}
                 ]}""";
-        mockMvc.perform(put("/api/judges/" + judgeId + "/availability")
+        mockMvc.perform(put("/api/v1/judges/" + judgeId + "/availability")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk());
     }
 
     private String createCourtroom(String name) throws Exception {
-        MvcResult res = mockMvc.perform(post("/api/courtrooms")
+        MvcResult res = mockMvc.perform(post("/api/v1/courtrooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"" + name + "\", \"capacity\": 50}"))
                 .andExpect(status().isCreated())
@@ -76,7 +102,7 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
                     {"dayOfWeek": "THURSDAY", "startTime": "09:00", "endTime": "17:00"},
                     {"dayOfWeek": "FRIDAY", "startTime": "09:00", "endTime": "17:00"}
                 ]}""";
-        mockMvc.perform(put("/api/courtrooms/" + courtroomId + "/availability")
+        mockMvc.perform(put("/api/v1/courtrooms/" + courtroomId + "/availability")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk());
@@ -84,9 +110,9 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
 
     private String createCase(String caseNumber, String caseType) throws Exception {
         String body = String.format(
-                "{\"caseNumber\": \"%s\", \"caseType\": \"%s\", \"filingDate\": \"2026-01-15\", \"currentStatus\": \"PENDING\"}",
+                "{\"caseNumber\": \"%s\", \"caseType\": \"%s\", \"filingDate\": \"2026-01-15\", \"currentStatus\": \"FILED\"}",
                 caseNumber, caseType);
-        MvcResult res = mockMvc.perform(post("/api/cases")
+        MvcResult res = mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
@@ -116,7 +142,7 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
         createCase("SCHED-003", "POCSO");
 
         // Trigger scheduling run
-        mockMvc.perform(post("/api/scheduling/run")
+        mockMvc.perform(post("/api/v1/scheduling/run")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())
@@ -134,7 +160,7 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
         String c1 = createCourtroom("Court Room 3");
         setCourtroomAvailability(c1);
 
-        mockMvc.perform(post("/api/scheduling/run")
+        mockMvc.perform(post("/api/v1/scheduling/run")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())
@@ -161,7 +187,7 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
                     "overriddenBy": "Registrar Kumar"
                 }""", caseId, judgeId, courtroomId);
 
-        mockMvc.perform(post("/api/scheduling/override")
+        mockMvc.perform(post("/api/v1/scheduling/override")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -179,7 +205,7 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
         createCase("LOOKUP-001", "BAIL");
 
         // Trigger run and extract runId
-        MvcResult runResult = mockMvc.perform(post("/api/scheduling/run")
+        MvcResult runResult = mockMvc.perform(post("/api/v1/scheduling/run")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())
@@ -189,7 +215,7 @@ class SchedulingControllerIntegrationTest extends AbstractIntegrationTest {
                 .get("runId").asText();
 
         // Get the run by ID
-        mockMvc.perform(get("/api/scheduling/runs/" + runId))
+        mockMvc.perform(get("/api/v1/scheduling/runs/" + runId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.runId").value(runId))
                 .andExpect(jsonPath("$.status").value("COMPLETED"))

@@ -3,6 +3,7 @@ package com.judicialflow.ingestion.services;
 import com.judicialflow.common.CaseRepository;
 import com.judicialflow.common.JudgeRepository;
 import com.judicialflow.common.enums.CaseStatus;
+import com.judicialflow.common.enums.CaseType;
 import com.judicialflow.common.models.Case;
 import com.judicialflow.common.models.Hearing;
 import com.judicialflow.common.models.Judge;
@@ -37,6 +38,25 @@ public class CaseService {
 
     private final CaseRepository caseRepository;
     private final JudgeRepository judgeRepository;
+    private final com.judicialflow.audit.AuditService auditService;
+    private final com.judicialflow.priority.repository.PriorityScoreRepository priorityScoreRepository;
+
+    private java.util.Map<String, Object> caseToState(Case c) {
+        if (c == null) return null;
+        java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("id", c.getId().toString());
+        map.put("caseNumber", c.getCaseNumber());
+        map.put("caseType", c.getCaseType() != null ? c.getCaseType().name() : null);
+        map.put("filingDate", c.getFilingDate() != null ? c.getFilingDate().toString() : null);
+        map.put("currentStatus", c.getCurrentStatus() != null ? c.getCurrentStatus().name() : null);
+        map.put("priorAdjournments", c.getPriorAdjournments());
+        map.put("statutoryDeadline", c.getStatutoryDeadline() != null ? c.getStatutoryDeadline().toString() : null);
+        map.put("assignedJudgeId", c.getAssignedJudge() != null ? c.getAssignedJudge().getId().toString() : null);
+        map.put("assignedCourtroomId", c.getAssignedCourtroom() != null ? c.getAssignedCourtroom().getId().toString() : null);
+        map.put("litigantContactEmail", c.getLitigantContactEmail());
+        map.put("deleted", c.isDeleted());
+        return map;
+    }
 
     @Transactional
     public CaseResponse createCase(CreateCaseRequest request) {
@@ -62,7 +82,7 @@ public class CaseService {
                     .orElseThrow(() -> new ResourceNotFoundException("Judge not found with id: " + request.getAssignedJudgeId()));
         }
 
-        CaseStatus status = request.getCurrentStatus() != null ? request.getCurrentStatus() : CaseStatus.PENDING;
+        CaseStatus status = request.getCurrentStatus() != null ? request.getCurrentStatus() : CaseStatus.FILED;
 
         Case newCase = Case.builder()
                 .caseNumber(request.getCaseNumber().trim())
@@ -72,10 +92,14 @@ public class CaseService {
                 .priorAdjournments(request.getPriorAdjournments())
                 .linkedCase(linkedCase)
                 .assignedJudge(assignedJudge)
+                .statutoryDeadline(request.getStatutoryDeadline())
+                .litigantContactEmail(request.getLitigantContactEmail() != null ? request.getLitigantContactEmail().trim() : null)
                 .deleted(false)
                 .build();
 
         Case saved = caseRepository.save(newCase);
+        auditService.log("Case", saved.getId().toString(), "CREATE", "CASE_CREATED",
+                null, caseToState(saved), "Created case " + saved.getCaseNumber());
         return CaseResponse.fromEntity(saved);
     }
 
@@ -85,6 +109,8 @@ public class CaseService {
 
         Case existing = caseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Case not found with id: " + id));
+
+        java.util.Map<String, Object> beforeState = caseToState(existing);
 
         if (request.getFilingDate().isAfter(LocalDate.now())) {
             throw new ValidationException("Filing date cannot be in the future");
@@ -114,8 +140,12 @@ public class CaseService {
         existing.setPriorAdjournments(request.getPriorAdjournments());
         existing.setLinkedCase(linkedCase);
         existing.setAssignedJudge(assignedJudge);
+        existing.setStatutoryDeadline(request.getStatutoryDeadline());
+        existing.setLitigantContactEmail(request.getLitigantContactEmail() != null ? request.getLitigantContactEmail().trim() : null);
 
         Case saved = caseRepository.save(existing);
+        auditService.log("Case", saved.getId().toString(), "UPDATE", "CASE_UPDATED",
+                beforeState, caseToState(saved), "Updated case " + saved.getCaseNumber());
         return CaseResponse.fromEntity(saved);
     }
 
@@ -124,15 +154,66 @@ public class CaseService {
         Case c = includeDeleted
                 ? caseRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Case not found with id: " + id))
                 : caseRepository.findByIdAndDeletedFalse(id).orElseThrow(() -> new ResourceNotFoundException("Case not found with id: " + id));
-        return CaseResponse.fromEntity(c);
+        Double score = priorityScoreRepository.findLatestByCaseId(c.getId())
+                .map(ps -> ps.getTotalScore().doubleValue())
+                .orElse(null);
+        return CaseResponse.fromEntity(c, score);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<CaseResponse> listCases(CaseFilterCriteria criteria, Pageable pageable) {
         Specification<Case> spec = createSpecification(criteria);
         Page<CaseResponse> page = caseRepository.findAll(spec, pageable)
-                .map(CaseResponse::fromEntity);
+                .map(c -> {
+                    Double score = priorityScoreRepository.findLatestByCaseId(c.getId())
+                            .map(ps -> ps.getTotalScore().doubleValue())
+                            .orElse(null);
+                    return CaseResponse.fromEntity(c, score);
+                });
         return PageResponse.of(page);
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.judicialflow.ingestion.dto.AgingReportItem> getAgingReport(CaseType caseType, Integer limit) {
+        int maxResults = (limit != null && limit > 0) ? limit : 100;
+        List<Case> cases = caseRepository.findAll().stream()
+                .filter(c -> !c.isDeleted() && c.getCurrentStatus() != CaseStatus.DISPOSED)
+                .filter(c -> caseType == null || c.getCaseType() == caseType)
+                .toList();
+
+        LocalDate today = LocalDate.now();
+        List<com.judicialflow.ingestion.dto.AgingReportItem> report = cases.stream()
+                .map(c -> {
+                    Double score = priorityScoreRepository.findLatestByCaseId(c.getId())
+                            .map(ps -> ps.getTotalScore().doubleValue())
+                            .orElse(0.0);
+                    long daysPending = java.time.temporal.ChronoUnit.DAYS.between(c.getFilingDate(), today);
+                    Long daysToDeadline = c.getStatutoryDeadline() != null
+                            ? java.time.temporal.ChronoUnit.DAYS.between(today, c.getStatutoryDeadline())
+                            : null;
+
+                    return com.judicialflow.ingestion.dto.AgingReportItem.builder()
+                            .caseId(c.getId())
+                            .caseNumber(c.getCaseNumber())
+                            .caseType(c.getCaseType())
+                            .status(c.getCurrentStatus())
+                            .filingDate(c.getFilingDate())
+                            .daysPending(daysPending)
+                            .adjournments(c.getPriorAdjournments())
+                            .statutoryDeadline(c.getStatutoryDeadline())
+                            .daysToDeadline(daysToDeadline)
+                            .priorityScore(score)
+                            .assignedJudgeName(c.getAssignedJudge() != null ? c.getAssignedJudge().getName() : null)
+                            .assignedCourtroomName(c.getAssignedCourtroom() != null ? c.getAssignedCourtroom().getName() : null)
+                            .build();
+                })
+                .sorted((a, b) -> Double.compare(
+                        b.getPriorityScore() != null ? b.getPriorityScore() : 0.0,
+                        a.getPriorityScore() != null ? a.getPriorityScore() : 0.0))
+                .limit(maxResults)
+                .toList();
+
+        return report;
     }
 
     @Transactional
@@ -141,9 +222,14 @@ public class CaseService {
         Case existing = caseRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Case not found with id: " + id));
 
+        java.util.Map<String, Object> beforeState = caseToState(existing);
+
         existing.setDeleted(true);
         existing.setDeletedAt(LocalDateTime.now());
-        caseRepository.save(existing);
+        Case saved = caseRepository.save(existing);
+
+        auditService.log("Case", saved.getId().toString(), "DELETE", "CASE_DELETED",
+                beforeState, caseToState(saved), "Soft-deleted case " + saved.getCaseNumber());
     }
 
     private void validateNoCircularReference(UUID caseId, UUID proposedLinkedCaseId) {

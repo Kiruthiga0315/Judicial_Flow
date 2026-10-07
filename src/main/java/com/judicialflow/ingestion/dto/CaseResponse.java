@@ -32,7 +32,7 @@ public class CaseResponse {
     @Schema(description = "Filing date of the case", example = "2024-01-15")
     private LocalDate filingDate;
 
-    @Schema(description = "Current status of the case", example = "PENDING")
+    @Schema(description = "Current status of the case", example = "FILED")
     private CaseStatus currentStatus;
 
     @Schema(description = "Date the case was disposed, if applicable", example = "2024-02-20")
@@ -40,6 +40,9 @@ public class CaseResponse {
 
     @Schema(description = "Number of prior adjournments", example = "0")
     private int priorAdjournments;
+
+    @Schema(description = "Current urgency priority score of the case", example = "42.50")
+    private Double priorityScore;
 
     @Schema(description = "UUID of the linked case if any")
     private UUID linkedCaseId;
@@ -52,6 +55,21 @@ public class CaseResponse {
 
     @Schema(description = "Name of the assigned judge if any", example = "Hon. Justice Sharma")
     private String assignedJudgeName;
+
+    @Schema(description = "Date of statutory deadline if applicable", example = "2024-06-30")
+    private LocalDate statutoryDeadline;
+
+    @Schema(description = "UUID of assigned courtroom if any")
+    private UUID assignedCourtroomId;
+
+    @Schema(description = "Name of assigned courtroom if any", example = "Courtroom 101")
+    private String assignedCourtroomName;
+
+    @Schema(description = "Next scheduled hearing timestamp if any")
+    private LocalDateTime nextHearingDate;
+
+    @Schema(description = "Contact email of litigant", example = "litigant@example.com")
+    private String litigantContactEmail;
 
     @Schema(description = "Whether the case has been soft-deleted", example = "false")
     private boolean deleted;
@@ -66,6 +84,10 @@ public class CaseResponse {
     private LocalDateTime updatedAt;
 
     public static CaseResponse fromEntity(Case c) {
+        return fromEntity(c, null);
+    }
+
+    public static CaseResponse fromEntity(Case c, Double score) {
         if (c == null) return null;
         return CaseResponse.builder()
                 .id(c.getId())
@@ -75,10 +97,16 @@ public class CaseResponse {
                 .currentStatus(c.getCurrentStatus())
                 .disposedDate(c.getDisposedDate())
                 .priorAdjournments(c.getPriorAdjournments())
+                .priorityScore(score)
                 .linkedCaseId(c.getLinkedCase() != null ? c.getLinkedCase().getId() : null)
                 .linkedCaseNumber(c.getLinkedCase() != null ? c.getLinkedCase().getCaseNumber() : null)
                 .assignedJudgeId(c.getAssignedJudge() != null ? c.getAssignedJudge().getId() : null)
                 .assignedJudgeName(c.getAssignedJudge() != null ? c.getAssignedJudge().getName() : null)
+                .statutoryDeadline(c.getStatutoryDeadline())
+                .assignedCourtroomId(c.getAssignedCourtroom() != null ? c.getAssignedCourtroom().getId() : null)
+                .assignedCourtroomName(c.getAssignedCourtroom() != null ? c.getAssignedCourtroom().getName() : null)
+                .nextHearingDate(c.getNextHearingDate())
+                .litigantContactEmail(c.getLitigantContactEmail())
                 .deleted(c.isDeleted())
                 .deletedAt(c.getDeletedAt())
                 .createdAt(c.getCreatedAt())

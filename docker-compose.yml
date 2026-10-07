@@ -3,13 +3,24 @@ services:
     image: postgres:15-alpine
     container_name: judicialflow-db
     environment:
-      POSTGRES_USER: ${DB_USER:-jfuser}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-jfpass}
+      POSTGRES_USER: ${DB_OWNER_USER:-jfowner}
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:-jfownerpass}
       POSTGRES_DB: ${DB_NAME:-judicialflow}
+      APP_USER: ${DB_USER:-jfuser}
+      APP_PASSWORD: ${DB_PASSWORD:-jfpass}
     ports:
       - "${DB_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/init-db:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: judicialflow-mailhog
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI / HTTP API port
     restart: unless-stopped
 
 volumes:

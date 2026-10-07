@@ -5,6 +5,7 @@ import com.judicialflow.common.enums.CaseStatus;
 import com.judicialflow.common.enums.CaseType;
 import com.judicialflow.common.models.Case;
 import com.judicialflow.duration.dto.DurationEstimateResponse;
+import com.judicialflow.duration.dto.ModelEvaluationResponse;
 import com.judicialflow.duration.model.DurationEstimate;
 import com.judicialflow.duration.repository.DurationEstimateRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,12 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -47,6 +43,7 @@ public class DurationEstimatorService {
         public int trainingSize;
         public int testSize;
         public String validationMethod;
+        public double baselineMean;
     }
 
     public void trainModels() {
@@ -54,13 +51,13 @@ public class DurationEstimatorService {
         List<Case> disposedCases = caseRepository.findAll().stream()
                 .filter(c -> c.getCurrentStatus() == CaseStatus.DISPOSED && c.getDisposedDate() != null)
                 .collect(Collectors.toList());
-        
+
         Map<CaseType, List<Case>> casesByType = disposedCases.stream()
                 .collect(Collectors.groupingBy(Case::getCaseType));
 
         for (CaseType type : CaseType.values()) {
             List<Case> typeCases = casesByType.getOrDefault(type, List.of());
-            
+
             if (typeCases.size() < THRESHOLD_FALLBACK) {
                 log.warn("Not enough data to train model for {} (count={})", type, typeCases.size());
                 continue;
@@ -69,7 +66,7 @@ public class DurationEstimatorService {
             // Sort by a stable key before shuffling
             typeCases.sort(Comparator.comparing(Case::getId));
             Collections.shuffle(typeCases, new Random(seed));
-            
+
             ModelStats stats = new ModelStats();
 
             if (typeCases.size() >= THRESHOLD_80_20) {
@@ -77,9 +74,9 @@ public class DurationEstimatorService {
                 int splitIndex = (int) (typeCases.size() * 0.8);
                 List<Case> trainSet = typeCases.subList(0, splitIndex);
                 List<Case> testSet = typeCases.subList(splitIndex, typeCases.size());
-                
+
                 SimpleLinearRegression model = trainOn(trainSet);
-                
+
                 // Calculate Test MAE
                 double totalTestError = 0;
                 double sumTrainY = trainSet.stream().mapToDouble(this::getDurationDays).sum();
@@ -92,33 +89,36 @@ public class DurationEstimatorService {
                     totalTestError += Math.abs(predictedDays - actualDays);
                     totalBaselineError += Math.abs(meanTrainY - actualDays);
                 }
-                
+
                 stats.regression = model;
                 stats.testMae = totalTestError / testSet.size();
                 stats.baselineMae = totalBaselineError / testSet.size();
                 stats.trainingSize = trainSet.size();
                 stats.testSize = testSet.size();
                 stats.validationMethod = "80/20 holdout";
+                stats.baselineMean = meanTrainY;
 
             } else {
                 // Leave-One-Out Cross Validation (LOOCV) for 8 to 29 cases
                 double totalTestError = 0;
                 double totalBaselineError = 0;
+                double sumAllY = typeCases.stream().mapToDouble(this::getDurationDays).sum();
+                double meanAllY = sumAllY / typeCases.size();
 
                 for (int i = 0; i < typeCases.size(); i++) {
                     Case holdout = typeCases.get(i);
                     List<Case> trainSet = typeCases.stream()
                             .filter(c -> !c.getId().equals(holdout.getId()))
                             .collect(Collectors.toList());
-                    
+
                     SimpleLinearRegression model = trainOn(trainSet);
-                    
+
                     double sumTrainY = trainSet.stream().mapToDouble(this::getDurationDays).sum();
                     double meanTrainY = sumTrainY / trainSet.size();
-                    
+
                     double actualDays = getDurationDays(holdout);
                     double predictedDays = model.predict(holdout.getPriorAdjournments());
-                    
+
                     totalTestError += Math.abs(predictedDays - actualDays);
                     totalBaselineError += Math.abs(meanTrainY - actualDays);
                 }
@@ -130,11 +130,12 @@ public class DurationEstimatorService {
                 stats.trainingSize = typeCases.size() - 1; // Effective training size per fold
                 stats.testSize = typeCases.size(); // We validated on all
                 stats.validationMethod = "leave-one-out";
+                stats.baselineMean = meanAllY;
             }
 
             stats.beatsBaseline = stats.testMae < stats.baselineMae;
             models.put(type, stats);
-            log.info("Trained model for {}: Method={}, TrainSize={}, TestSize={}, TestMAE={}, BaselineMAE={}, BeatsBaseline={}", 
+            log.info("Trained model for {}: Method={}, TrainSize={}, TestSize={}, TestMAE={}, BaselineMAE={}, BeatsBaseline={}",
                     type, stats.validationMethod, stats.trainingSize, stats.testSize, stats.testMae, stats.baselineMae, stats.beatsBaseline);
         }
         lastTrained = LocalDateTime.now();
@@ -169,17 +170,31 @@ public class DurationEstimatorService {
         double mae;
         double baselineMae = 0;
         boolean beatsBaseline = false;
-        
-        if (stats != null && stats.regression != null) {
-            double featureValue = courtCase.getPriorAdjournments();
-            predictedDays = stats.regression.predict(featureValue);
-            mae = stats.testMae;
+        Integer trainingCount = null;
+
+        if (stats != null) {
             baselineMae = stats.baselineMae;
             beatsBaseline = stats.beatsBaseline;
-            
-            basis = "based on " + stats.trainingSize + " training cases and validated on " + stats.testSize + " holdout cases using " + stats.validationMethod + ".";
+            trainingCount = stats.trainingSize;
+
             if (!beatsBaseline) {
-                basis += " Model did not beat the mean-predictor baseline.";
+                // Requirement 9.B: If it does not beat the baseline for a type, say so and keep that type on the baseline.
+                predictedDays = stats.baselineMean;
+                mae = stats.baselineMae;
+                basis = String.format(Locale.US,
+                        "Model did not beat naive per-type-mean baseline (Test MAE: %.1f vs Baseline MAE: %.1f); keeping type on naive mean baseline (%.1f days) based on %d training cases.",
+                        stats.testMae, stats.baselineMae, stats.baselineMean, stats.trainingSize);
+            } else if (stats.regression != null) {
+                double featureValue = courtCase.getPriorAdjournments();
+                predictedDays = stats.regression.predict(featureValue);
+                mae = stats.testMae;
+                basis = String.format(Locale.US,
+                        "Linear regression based on %d synthetic cases and validated on %d holdout cases using %s (Test MAE: %.1f beats Baseline MAE: %.1f). Note: circular relationship in synthetic generator where adjournments = duration/60 + noise.",
+                        stats.trainingSize, stats.testSize, stats.validationMethod, stats.testMae, stats.baselineMae);
+            } else {
+                predictedDays = 180;
+                mae = 90;
+                basis = "fallback, insufficient data; using generic default.";
             }
         } else {
             predictedDays = 180;
@@ -198,7 +213,7 @@ public class DurationEstimatorService {
 
         DurationEstimate estimate = durationEstimateRepository.findByCourtCaseId(courtCase.getId())
                 .orElse(DurationEstimate.builder().courtCase(courtCase).build());
-        
+
         estimate.setPredictedDurationDays(predictedDays);
         estimate.setMinDurationDays((int) minDays);
         estimate.setMaxDurationDays((int) maxDays);
@@ -208,8 +223,9 @@ public class DurationEstimatorService {
         estimate.setTestMae(mae);
         estimate.setBaselineMaeDays(baselineMae);
         estimate.setBeatsBaseline(beatsBaseline);
+        estimate.setTrainingSampleCount(trainingCount);
         estimate.setComputedAt(LocalDateTime.now());
-        
+
         durationEstimateRepository.save(estimate);
 
         return DurationEstimateResponse.builder()
@@ -222,7 +238,32 @@ public class DurationEstimatorService {
                 .testMae(mae)
                 .baselineMaeDays(baselineMae)
                 .beatsBaseline(beatsBaseline)
+                .trainingSampleCount(trainingCount)
                 .computedAt(estimate.getComputedAt())
                 .build();
+    }
+
+    public Map<CaseType, ModelEvaluationResponse> getModelEvaluations() {
+        if (lastTrained == null) {
+            trainModels();
+        }
+        Map<CaseType, ModelEvaluationResponse> evals = new LinkedHashMap<>();
+        for (CaseType type : CaseType.values()) {
+            ModelStats ms = models.get(type);
+            if (ms != null) {
+                evals.put(type, ModelEvaluationResponse.builder()
+                        .caseType(type)
+                        .testMae(ms.testMae)
+                        .baselineMae(ms.baselineMae)
+                        .beatsBaseline(ms.beatsBaseline)
+                        .trainingSampleCount(ms.trainingSize)
+                        .testSampleSize(ms.testSize)
+                        .validationMethod(ms.validationMethod)
+                        .usingBaseline(!ms.beatsBaseline)
+                        .baselineMeanDays(ms.baselineMean)
+                        .build());
+            }
+        }
+        return evals;
     }
 }

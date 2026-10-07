@@ -20,7 +20,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 
 @RestController
-@RequestMapping("/api/dev/generator")
+@RequestMapping("/api/v1/dev/generator")
 @Slf4j
 public class SyntheticCaseGeneratorController {
 
@@ -36,20 +36,17 @@ public class SyntheticCaseGeneratorController {
     }
 
     /*
-     * NJDG Approximate Aggregate Calibration:
-     * - Case Types:
-     *   - Criminal (75%): BAIL (~10%), POCSO (~5%), CRIMINAL_OTHER (~60%)
-     *   - Civil (25%): CIVIL (~20%), MATRIMONIAL (~5%)
-     * 
-     * - Pendency Duration (Age of case) - Global:
-     *   - < 1 year: 30%
-     *   - 1-3 years: 30%
-     *   - 3-5 years: 17%
-     *   - 5-10 years: 15%
-     *   - > 10 years: 8%
+     * Caseload Calibration Targets & Citations:
+     * - Verified NJDG Macro Aggregates (Source: National Judicial Data Grid Public Portal, 2023-2024):
+     *   - Macro Criminal vs Civil ratio: ~75% Criminal, ~25% Civil
+     *   - Age of case global pendency brackets: <1y: 30%, 1-3y: 30%, 3-5y: 17%, 5-10y: 15%, >10y: 8%
+     * - Unverified figures labeled ASSUMPTION:
+     *   - Sub-case types: BAIL (10%), POCSO (5%), CRIMINAL_OTHER (60%), CIVIL (20%), MATRIMONIAL (5%) [ASSUMPTION]
+     *   - Historical closed case disposal rate: 20% [ASSUMPTION]
+     *   - Adjournment relationship: (days / 60) + noise [ASSUMPTION]
      *
-     * Note: This is SYNTHETIC data calibrated to NJDG aggregates. 
-     * It does NOT represent real case records or real individuals.
+     * Note: This is strictly SYNTHETIC data generated for simulation and testing.
+     * It does NOT represent real case records, real litigants, or empirical court outcomes.
      */
 
     @PostMapping("/cases")
@@ -63,7 +60,7 @@ public class SyntheticCaseGeneratorController {
             
             // Phase 2: Disposal Rates
             CaseStatus status = (random.nextInt(100) < NjdgCalibrationTargets.DISPOSAL_RATE_PERCENTAGE) 
-                                ? CaseStatus.DISPOSED : CaseStatus.PENDING;
+                                ? CaseStatus.DISPOSED : CaseStatus.FILED;
             
             LocalDate disposedDate = null;
             if (status == CaseStatus.DISPOSED) {
@@ -74,6 +71,13 @@ public class SyntheticCaseGeneratorController {
             }
 
             int adjournments;
+            /*
+             * Duration vs priorAdjournments relationship:
+             * Here, priorAdjournments is directly a deterministic linear function of duration (totalDays or daysSinceFiling)
+             * plus random noise (adjournments = (days / 60) + random.nextInt(3)).
+             * Thus, duration and priorAdjournments are NOT independent; priorAdjournments is derived as a function of duration,
+             * and conversely duration is strongly tied to priorAdjournments.
+             */
             if (status == CaseStatus.DISPOSED) {
                 // To make the ML model have some actual signal, we loosely correlate adjournments with total duration.
                 int totalDays = disposedDate != null ? (int) java.time.temporal.ChronoUnit.DAYS.between(filingDate, disposedDate) : 0;

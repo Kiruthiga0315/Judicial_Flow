@@ -41,6 +41,9 @@ public class Case {
     @Column(name = "disposed_date")
     private LocalDate disposedDate;
 
+    @Column(name = "statutory_deadline")
+    private LocalDate statutoryDeadline;
+
     @Builder.Default
     @Column(nullable = false)
     private int priorAdjournments = 0;
@@ -52,6 +55,16 @@ public class Case {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_judge_id")
     private Judge assignedJudge;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_courtroom_id")
+    private Courtroom assignedCourtroom;
+
+    @Column(name = "next_hearing_date")
+    private LocalDateTime nextHearingDate;
+
+    @Column(name = "litigant_contact_email")
+    private String litigantContactEmail;
 
     @Builder.Default
     @Column(nullable = false)

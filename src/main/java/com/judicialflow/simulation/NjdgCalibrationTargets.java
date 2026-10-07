@@ -4,26 +4,35 @@ import com.judicialflow.common.enums.CaseType;
 import java.util.Map;
 
 /**
- * Approximate NJDG-calibrated targets.
- * Source: National Judicial Data Grid (NJDG) published aggregate statistics.
- * As of: January 2024 (Approximate)
- * These are approximate targets for synthetic data generation and do not claim to be exact.
+ * Synthetic Caseload Calibration Constants & Source Attribution.
+ *
+ * NOTE ON NJDG DATA:
+ * The National Judicial Data Grid (NJDG) public portal reports cumulative pending stock,
+ * NOT incoming filing flow/arrival ratios. A pending-stock ratio is not an arrival ratio.
+ * Consequently, in the absence of verified empirical microdata with explicit URL, table name,
+ * and access date, ALL caseload calibration targets below are strictly designated as ASSUMPTIONS.
+ *
+ * A dedicated placeholder is provided in docs/simulation-methodology.md for users to record
+ * verified empirical sources and calibration dates.
  */
 public final class NjdgCalibrationTargets {
-    
+
     private NjdgCalibrationTargets() {}
 
+    /**
+     * ASSUMPTION: Case type distribution targets for synthetic arrivals.
+     * Derived from illustrative approximations of broad pending stock, not verified filing flow.
+     */
     public static final Map<CaseType, Double> CASE_TYPE_PERCENTAGES = Map.of(
-            CaseType.BAIL, 10.0,            // Source: approximate estimate
-            CaseType.POCSO, 5.0,            // Source: approximate estimate
-            CaseType.CRIMINAL_OTHER, 60.0,  // Source: approximate estimate
-            CaseType.CIVIL, 20.0,           // Source: approximate estimate
-            CaseType.MATRIMONIAL, 5.0       // Source: approximate estimate
+            CaseType.BAIL, 10.0,            // ASSUMPTION
+            CaseType.POCSO, 5.0,            // ASSUMPTION
+            CaseType.CRIMINAL_OTHER, 60.0,  // ASSUMPTION
+            CaseType.CIVIL, 20.0,           // ASSUMPTION
+            CaseType.MATRIMONIAL, 5.0       // ASSUMPTION
     );
 
     /**
-     * Approximate/illustrative disposal rate for synthetic case generation.
-     * Represents the historical backlog of closed cases.
+     * ASSUMPTION: Illustrative 20% disposal rate for synthetic caseload seeding.
      */
     public static final double DISPOSAL_RATE_PERCENTAGE = 20.0;
 }

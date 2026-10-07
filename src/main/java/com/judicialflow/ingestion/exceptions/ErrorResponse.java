@@ -38,4 +38,7 @@ public class ErrorResponse {
     @Builder.Default
     @Schema(description = "List of validation errors if applicable")
     private List<ValidationError> errors = new ArrayList<>();
+
+    @Schema(description = "ID of running run if conflict occurred")
+    private String runningRunId;
 }

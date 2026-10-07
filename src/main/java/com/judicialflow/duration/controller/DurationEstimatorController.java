@@ -28,6 +28,11 @@ public class DurationEstimatorController {
         return ResponseEntity.ok(response);
     }
     
+    @GetMapping("/models")
+    public ResponseEntity<java.util.Map<com.judicialflow.common.enums.CaseType, com.judicialflow.duration.dto.ModelEvaluationResponse>> getModelEvaluations() {
+        return ResponseEntity.ok(estimatorService.getModelEvaluations());
+    }
+
     @PostMapping("/train")
     public ResponseEntity<String> forceRetrain() {
         estimatorService.trainModels();

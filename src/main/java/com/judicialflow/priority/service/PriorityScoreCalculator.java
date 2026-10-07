@@ -75,9 +75,13 @@ public class PriorityScoreCalculator {
      * @return a fully populated {@link PriorityScoreResult} with breakdown
      */
     public PriorityScoreResult calculate(Case legalCase) {
-        log.debug("Calculating priority score for case {}", legalCase.getCaseNumber());
+        return calculate(legalCase, LocalDate.now());
+    }
 
-        LocalDate today = LocalDate.now();
+    public PriorityScoreResult calculate(Case legalCase, LocalDate asOfDate) {
+        log.debug("Calculating priority score for case {} as of {}", legalCase.getCaseNumber(), asOfDate);
+
+        LocalDate today = asOfDate != null ? asOfDate : LocalDate.now();
         List<ScoreFactorBreakdown> factors = new ArrayList<>();
 
         // -----------------------------------------------------------------------
@@ -143,7 +147,47 @@ public class PriorityScoreCalculator {
                 .build());
 
         // -----------------------------------------------------------------------
-        // Factor 4: Linked-case status
+        // Factor 4: Statutory deadline proximity
+        // -----------------------------------------------------------------------
+        LocalDate deadline = legalCase.getStatutoryDeadline();
+        BigDecimal deadlineContribution;
+        BigDecimal deadlineRawValue;
+        String deadlineExplanation;
+
+        if (deadline == null) {
+            deadlineContribution = BigDecimal.ZERO.setScale(SCALE, RM);
+            deadlineRawValue = BigDecimal.ZERO.setScale(SCALE, RM);
+            deadlineExplanation = "No statutory deadline set; contributes 0.00 points.";
+        } else {
+            long daysUntil = ChronoUnit.DAYS.between(today, deadline);
+            deadlineRawValue = BigDecimal.valueOf(daysUntil).setScale(SCALE, RM);
+            if (daysUntil <= 0) {
+                deadlineContribution = weights.getMaxDeadlineBonus().setScale(SCALE, RM);
+                deadlineExplanation = daysUntil == 0
+                        ? String.format("Statutory deadline is today; maximum urgency bonus applied: %.2f points.", deadlineContribution)
+                        : String.format("Statutory deadline expired %d day(s) ago; maximum urgency bonus applied: %.2f points.",
+                        Math.abs(daysUntil), deadlineContribution);
+            } else {
+                deadlineContribution = weights.getMaxDeadlineBonus()
+                        .subtract(BigDecimal.valueOf(daysUntil * 2L))
+                        .max(BigDecimal.ZERO)
+                        .setScale(SCALE, RM);
+                deadlineExplanation = String.format(
+                        "Statutory deadline in %d day(s); escalating proximity bonus of %.2f points applied.",
+                        daysUntil, deadlineContribution);
+            }
+        }
+
+        factors.add(ScoreFactorBreakdown.builder()
+                .factorName("Statutory Deadline Proximity")
+                .rawValue(deadlineRawValue)
+                .weight(weights.getMaxDeadlineBonus())
+                .contribution(deadlineContribution)
+                .explanation(deadlineExplanation)
+                .build());
+
+        // -----------------------------------------------------------------------
+        // Factor 5: Linked-case status
         // -----------------------------------------------------------------------
         boolean hasLinkedCase = legalCase.getLinkedCase() != null;
         BigDecimal linkedContribution = hasLinkedCase
@@ -165,6 +209,7 @@ public class PriorityScoreCalculator {
         BigDecimal total = typeUrgency
                 .add(agingContribution)
                 .add(adjournmentContribution)
+                .add(deadlineContribution)
                 .add(linkedContribution)
                 .setScale(SCALE, RM);
 
@@ -173,9 +218,9 @@ public class PriorityScoreCalculator {
 
         String summary = buildSummary(legalCase, total, safeDays, adjournments);
 
-        log.info("Priority score for case {}: {} (type={}, days={}, adj={}, linked={})",
+        log.debug("Priority score for case {}: {} (type={}, days={}, adj={}, deadline={}, linked={})",
                 legalCase.getCaseNumber(), total, legalCase.getCaseType(), safeDays,
-                adjournments, hasLinkedCase);
+                adjournments, deadlineContribution, hasLinkedCase);
 
         return PriorityScoreResult.builder()
                 .caseId(legalCase.getId())
@@ -256,7 +301,7 @@ public class PriorityScoreCalculator {
     }
 
     private String buildSummary(Case legalCase, BigDecimal total, long days, int adjournments) {
-        String statusLabel = legalCase.getCurrentStatus() == CaseStatus.PENDING ? "pending" : "active";
+        String statusLabel = legalCase.getCurrentStatus() == CaseStatus.FILED ? "pending" : "active";
         return String.format(
                 "Score %.2f: %s case %s %s for %d day(s) with %d prior adjournment(s)%s.",
                 total,

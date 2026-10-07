@@ -10,6 +10,7 @@ import com.judicialflow.common.JudgeRepository;
 import com.judicialflow.common.enums.CaseStatus;
 import com.judicialflow.common.enums.HearingStatus;
 import com.judicialflow.common.models.*;
+import com.judicialflow.ingestion.exceptions.ConflictException;
 import com.judicialflow.ingestion.exceptions.ResourceNotFoundException;
 import com.judicialflow.priority.repository.PriorityScoreRepository;
 import com.judicialflow.scheduling.config.SchedulingConfig;
@@ -17,10 +18,15 @@ import com.judicialflow.scheduling.dto.*;
 import com.judicialflow.scheduling.engine.SchedulingEngine;
 import com.judicialflow.scheduling.engine.SchedulingInput;
 import com.judicialflow.scheduling.engine.SchedulingResult;
+import com.judicialflow.scheduling.event.HearingCommittedEvent;
+import com.judicialflow.scheduling.exception.SchedulingConflictException;
 import com.judicialflow.scheduling.model.*;
 import com.judicialflow.scheduling.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +41,7 @@ import java.util.stream.Collectors;
  *
  * <p>Responsibilities:
  * <ol>
- *   <li>Load unscheduled cases (PENDING, not deleted) with their latest priority scores.</li>
+ *   <li>Load unscheduled cases (FILED, not deleted) with their latest priority scores.</li>
  *   <li>Load all judges and courtrooms with availability windows.</li>
  *   <li>Load existing committed hearings for conflict detection.</li>
  *   <li>Assemble {@link SchedulingInput} and call {@link SchedulingEngine#solve}.</li>
@@ -59,8 +65,11 @@ public class SchedulingService {
     private final SchedulingDecisionRepository decisionRepository;
     private final SchedulingOverrideRepository overrideRepository;
     private final AuditLogRepository auditLogRepository;
+    private final com.judicialflow.audit.AuditService auditService;
     private final SchedulingConfig config;
     private final ObjectMapper objectMapper;
+    private final SchedulingConcurrencyGuard concurrencyGuard;
+    private final ApplicationEventPublisher eventPublisher;
 
     // =========================================================================
     // Public API
@@ -77,6 +86,12 @@ public class SchedulingService {
      */
     @Transactional
     public SchedulingRunResponse triggerSchedulingRun(SchedulingConfigDto configDto) {
+        UUID prospectiveRunId = UUID.randomUUID();
+        Optional<UUID> runningId = concurrencyGuard.tryAcquire(prospectiveRunId);
+        if (runningId.isPresent()) {
+            throw new SchedulingConflictException(runningId.get());
+        }
+
         int horizonDays = configDto != null && configDto.getHorizonDays() != null
                 ? configDto.getHorizonDays() : config.getHorizonDays();
         int defaultDuration = configDto != null && configDto.getDefaultDurationMinutes() != null
@@ -87,6 +102,7 @@ public class SchedulingService {
 
         // 1. Create the run record
         SchedulingRun run = SchedulingRun.builder()
+                .id(prospectiveRunId)
                 .status(RunStatus.RUNNING)
                 .horizonDays(horizonDays)
                 .defaultDurationMinutes(defaultDuration)
@@ -121,6 +137,29 @@ public class SchedulingService {
             }
 
             run = runRepository.save(run);
+
+            // Audit the scheduling run with summary details
+            Map<String, Object> runSummary = new LinkedHashMap<>();
+            runSummary.put("runId", run.getId().toString());
+            runSummary.put("status", run.getStatus().name());
+            runSummary.put("totalInput", run.getTotalCasesInput());
+            runSummary.put("totalAssigned", run.getTotalAssigned());
+            runSummary.put("totalUnschedulable", run.getTotalUnschedulable());
+            runSummary.put("seed", run.getSeed());
+            runSummary.put("horizonDays", run.getHorizonDays());
+            runSummary.put("defaultDurationMinutes", run.getDefaultDurationMinutes());
+            runSummary.put("weightedCost", run.getTotalWeightedSoftCost());
+
+            auditService.logSystem(
+                    "SchedulingRun",
+                    run.getId().toString(),
+                    "SCHEDULING_RUN",
+                    "ENGINE_RUN_COMPLETED",
+                    null,
+                    runSummary,
+                    String.format("Scheduling run completed: runId=%s, assigned=%d, unschedulable=%d, seed=%d",
+                            run.getId(), run.getTotalAssigned(), run.getTotalUnschedulable(), run.getSeed())
+            );
 
             // 6. Build response
             Map<String, Integer> workloadDist = new HashMap<>();
@@ -167,6 +206,8 @@ public class SchedulingService {
             run.setErrorMessage(e.getMessage());
             runRepository.save(run);
             throw new RuntimeException("Scheduling run failed: " + e.getMessage(), e);
+        } finally {
+            concurrencyGuard.release();
         }
     }
 
@@ -205,6 +246,24 @@ public class SchedulingService {
                 .defaultDurationMinutes(run.getDefaultDurationMinutes())
                 .proposals(proposalResponses)
                 .build();
+    }
+
+    /**
+     * Retrieve the latest completed scheduling run.
+     */
+    @Transactional(readOnly = true)
+    public SchedulingRunResponse getLatestRun() {
+        SchedulingRun run = runRepository.findTopByStatusOrderByTriggeredAtDesc(RunStatus.COMPLETED)
+                .orElseThrow(() -> new ResourceNotFoundException("No completed scheduling run found"));
+        return getSchedulingRun(run.getId());
+    }
+
+    /**
+     * Retrieve proposals from the latest completed scheduling run.
+     */
+    @Transactional(readOnly = true)
+    public List<ProposalResponse> getLatestProposals() {
+        return getLatestRun().getProposals();
     }
 
     /**
@@ -252,20 +311,32 @@ public class SchedulingService {
         caseRepository.save(legalCase);
 
         // Audit log
-        AuditLogEntry auditEntry = AuditLogEntry.builder()
-                .entityName("Hearing")
-                .entityId(hearing.getId().toString())
-                .action("MANUAL_OVERRIDE")
-                .performedBy(request.getOverriddenBy())
-                .reasonCode("REGISTRAR_OVERRIDE")
-                .details(String.format(
+        Map<String, Object> beforeState = new LinkedHashMap<>();
+        beforeState.put("caseId", legalCase.getId().toString());
+        beforeState.put("status", legalCase.getCurrentStatus() != null ? legalCase.getCurrentStatus().name() : null);
+
+        Map<String, Object> afterState = new LinkedHashMap<>();
+        afterState.put("hearingId", hearing.getId().toString());
+        afterState.put("caseId", legalCase.getId().toString());
+        afterState.put("judgeId", judge.getId().toString());
+        afterState.put("judgeName", judge.getName());
+        afterState.put("courtroomId", courtroom.getId().toString());
+        afterState.put("courtroomName", courtroom.getName());
+        afterState.put("scheduledTime", request.getScheduledTime().toString());
+        afterState.put("durationMinutes", duration);
+
+        auditService.log(
+                "Hearing",
+                hearing.getId().toString(),
+                "MANUAL_OVERRIDE",
+                "REGISTRAR_OVERRIDE",
+                beforeState,
+                afterState,
+                String.format(
                         "Manual override for case %s: assigned to Judge %s in %s at %s. Reason: %s",
                         legalCase.getCaseNumber(), judge.getName(), courtroom.getName(),
-                        request.getScheduledTime(), request.getReason()))
-                .build();
-        // We need an audit log repository — use entityManager or a simple save
-        auditLogRepository.save(auditEntry);
-        log.info("AUDIT: {}", auditEntry.getDetails());
+                        request.getScheduledTime(), request.getReason())
+        );
 
         return ProposalResponse.builder()
                 .caseId(legalCase.getId())
@@ -280,15 +351,183 @@ public class SchedulingService {
                 .build();
     }
 
+    /**
+     * Approve a proposal: commits a Hearing, updates Case status and assignments,
+     * audits the change, and publishes HearingCommittedEvent.
+     */
+    @Transactional
+    public ProposalResponse approveProposal(UUID proposalId) {
+        SchedulingProposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scheduling proposal not found: " + proposalId));
+
+        if (proposal.getStatus() != ProposalStatus.PROPOSED) {
+            throw new ConflictException("Proposal cannot be approved because it has status: " + proposal.getStatus());
+        }
+
+        // Re-validate conflict-free hard constraints:
+        // Judge and Courtroom must not be already booked for another committed hearing in overlapping time slot
+        LocalDateTime slotStart = proposal.getProposedTime();
+        LocalDateTime slotEnd = slotStart.plusMinutes(proposal.getDurationMinutes());
+
+        List<Hearing> potentialConflicts = hearingRepository.findPotentialConflicts(
+                proposal.getJudge().getId(),
+                proposal.getCourtroom().getId(),
+                HearingStatus.SCHEDULED,
+                slotStart.minusHours(24),
+                slotEnd.plusHours(24)
+        );
+
+        for (Hearing h : potentialConflicts) {
+            LocalDateTime hStart = h.getScheduledTime();
+            LocalDateTime hEnd = hStart.plusMinutes(h.getEstimatedDurationMinutes());
+            if (slotStart.isBefore(hEnd) && hStart.isBefore(slotEnd)) {
+                if (h.getJudge().getId().equals(proposal.getJudge().getId())) {
+                    throw new ConflictException(String.format(
+                            "Proposed slot conflict: Judge %s is already scheduled for another hearing at %s",
+                            proposal.getJudge().getName(), hStart));
+                }
+                if (h.getCourtroom().getId().equals(proposal.getCourtroom().getId())) {
+                    throw new ConflictException(String.format(
+                            "Proposed slot conflict: Courtroom %s is already scheduled for another hearing at %s",
+                            proposal.getCourtroom().getName(), hStart));
+                }
+            }
+        }
+
+        // 1. Create committed Hearing
+        Hearing hearing = Hearing.builder()
+                .legalCase(proposal.getLegalCase())
+                .judge(proposal.getJudge())
+                .courtroom(proposal.getCourtroom())
+                .scheduledTime(proposal.getProposedTime())
+                .estimatedDurationMinutes(proposal.getDurationMinutes())
+                .status(HearingStatus.SCHEDULED)
+                .createdByEngine(true)
+                .build();
+        hearing = hearingRepository.save(hearing);
+
+        // 2. Update Case
+        Case legalCase = proposal.getLegalCase();
+        Map<String, Object> beforeMap = new LinkedHashMap<>();
+        beforeMap.put("proposalId", proposal.getId().toString());
+        beforeMap.put("caseId", legalCase.getId().toString());
+        beforeMap.put("caseStatus", legalCase.getCurrentStatus() != null ? legalCase.getCurrentStatus().name() : null);
+        beforeMap.put("assignedJudgeId", legalCase.getAssignedJudge() != null ? legalCase.getAssignedJudge().getId().toString() : null);
+        beforeMap.put("assignedCourtroomId", legalCase.getAssignedCourtroom() != null ? legalCase.getAssignedCourtroom().getId().toString() : null);
+        beforeMap.put("nextHearingDate", legalCase.getNextHearingDate() != null ? legalCase.getNextHearingDate().toString() : null);
+        beforeMap.put("proposalStatus", ProposalStatus.PROPOSED.name());
+
+        legalCase.setCurrentStatus(CaseStatus.SCHEDULED);
+        legalCase.setAssignedJudge(proposal.getJudge());
+        legalCase.setAssignedCourtroom(proposal.getCourtroom());
+        legalCase.setNextHearingDate(proposal.getProposedTime());
+        caseRepository.save(legalCase);
+
+        // 3. Update proposal status
+        proposal.setStatus(ProposalStatus.APPROVED);
+        proposal = proposalRepository.save(proposal);
+
+        // 4. Audit Log
+        Map<String, Object> afterMap = new LinkedHashMap<>();
+        afterMap.put("proposalId", proposal.getId().toString());
+        afterMap.put("hearingId", hearing.getId().toString());
+        afterMap.put("caseId", legalCase.getId().toString());
+        afterMap.put("caseStatus", legalCase.getCurrentStatus().name());
+        afterMap.put("assignedJudgeId", proposal.getJudge().getId().toString());
+        afterMap.put("assignedCourtroomId", proposal.getCourtroom().getId().toString());
+        afterMap.put("nextHearingDate", proposal.getProposedTime().toString());
+        afterMap.put("proposalStatus", ProposalStatus.APPROVED.name());
+
+        auditService.log(
+                "Proposal",
+                proposal.getId().toString(),
+                "APPROVE",
+                "PROPOSAL_APPROVED",
+                beforeMap,
+                afterMap,
+                String.format("Approved proposal %s for case %s. Hearing %s created.",
+                        proposal.getId(), legalCase.getCaseNumber(), hearing.getId())
+        );
+
+        // 5. Publish domain event
+        eventPublisher.publishEvent(new HearingCommittedEvent(
+                this, hearing.getId(), legalCase.getId(),
+                proposal.getJudge().getId(), proposal.getCourtroom().getId(),
+                proposal.getId(), proposal.getProposedTime(), proposal.getDurationMinutes()
+        ));
+
+        // 6. Map to ProposalResponse
+        com.judicialflow.scheduling.model.SchedulingDecision dec =
+                decisionRepository.findById(proposal.getId()).orElse(null);
+        return mapToProposalResponse(proposal, dec);
+    }
+
+    /**
+     * Reject a proposal: marks REJECTED with reason and records audit entry.
+     */
+    @Transactional
+    public ProposalResponse rejectProposal(UUID proposalId, String reason) {
+        SchedulingProposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scheduling proposal not found: " + proposalId));
+
+        if (proposal.getStatus() != ProposalStatus.PROPOSED) {
+            throw new ConflictException("Proposal cannot be rejected because it has status: " + proposal.getStatus());
+        }
+
+        Map<String, Object> beforeMap = new LinkedHashMap<>();
+        beforeMap.put("proposalId", proposal.getId().toString());
+        beforeMap.put("caseId", proposal.getLegalCase().getId().toString());
+        beforeMap.put("status", ProposalStatus.PROPOSED.name());
+
+        proposal.setStatus(ProposalStatus.REJECTED);
+        proposal.setRejectionReason(reason);
+        proposal = proposalRepository.save(proposal);
+
+        Map<String, Object> afterMap = new LinkedHashMap<>();
+        afterMap.put("proposalId", proposal.getId().toString());
+        afterMap.put("caseId", proposal.getLegalCase().getId().toString());
+        afterMap.put("status", ProposalStatus.REJECTED.name());
+        afterMap.put("rejectionReason", reason);
+
+        auditService.log(
+                "Proposal",
+                proposal.getId().toString(),
+                "REJECT",
+                "PROPOSAL_REJECTED",
+                beforeMap,
+                afterMap,
+                String.format("Rejected proposal %s for case %s. Reason: %s",
+                        proposal.getId(), proposal.getLegalCase().getCaseNumber(), reason)
+        );
+
+        com.judicialflow.scheduling.model.SchedulingDecision dec =
+                decisionRepository.findById(proposal.getId()).orElse(null);
+        return mapToProposalResponse(proposal, dec);
+    }
+
+    private String getAuthenticatedUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            return auth.getName();
+        }
+        return "SYSTEM";
+    }
+
     // =========================================================================
     // Private helpers
     // =========================================================================
 
     private SchedulingInput assembleInput(int horizonDays, int defaultDuration) {
+        // Find all cases that already have active committed hearings — exclude them unless flagged
+        Set<UUID> casesWithCommittedHearings = hearingRepository.findAllByStatus(HearingStatus.SCHEDULED).stream()
+                .map(h -> h.getLegalCase().getId())
+                .collect(Collectors.toSet());
+
         // Load unscheduled cases
         List<Case> pendingCases = caseRepository.findAll().stream()
                 .filter(c -> !c.isDeleted())
-                .filter(c -> c.getCurrentStatus() == CaseStatus.PENDING)
+                .filter(c -> c.getCurrentStatus() != null && c.getCurrentStatus().isSchedulable())
+                .filter(c -> !casesWithCommittedHearings.contains(c.getId()))
                 .toList();
 
         List<SchedulingInput.CaseInfo> caseInfos = pendingCases.stream()
@@ -394,19 +633,39 @@ public class SchedulingService {
 
     private List<ProposalResponse> persistResults(SchedulingRun run, SchedulingResult result) {
         List<ProposalResponse> responses = new ArrayList<>();
+        if (result.getAssignments().isEmpty()) {
+            return responses;
+        }
+
+        // Bulk-supersede previous PROPOSED proposals for assigned cases in one single query
+        List<UUID> assignedCaseIds = result.getAssignments().stream()
+                .map(SchedulingResult.ProposedAssignment::getCaseId)
+                .toList();
+        proposalRepository.updateStatusByCaseIdsAndOldStatus(
+                assignedCaseIds, ProposalStatus.PROPOSED, ProposalStatus.SUPERSEDED);
+
+        // Preload entities into maps for O(1) resolution
+        Map<UUID, Case> caseMap = caseRepository.findAllById(assignedCaseIds).stream()
+                .collect(Collectors.toMap(Case::getId, c -> c));
+        Map<UUID, Judge> judgeMap = judgeRepository.findAll().stream()
+                .collect(Collectors.toMap(Judge::getId, j -> j));
+        Map<UUID, Courtroom> courtroomMap = courtroomRepository.findAll().stream()
+                .collect(Collectors.toMap(Courtroom::getId, c -> c));
+
+        List<SchedulingProposal> proposalsToSave = new ArrayList<>(result.getAssignments().size());
+        List<SchedulingResult.DecisionRecord> decisionsData = new ArrayList<>(result.getAssignments().size());
+        List<SchedulingResult.ProposedAssignment> validAssignments = new ArrayList<>(result.getAssignments().size());
 
         for (SchedulingResult.ProposedAssignment assignment : result.getAssignments()) {
-            // Resolve entities
-            Case legalCase = caseRepository.findById(assignment.getCaseId()).orElse(null);
-            Judge judge = judgeRepository.findById(assignment.getJudgeId()).orElse(null);
-            Courtroom courtroom = courtroomRepository.findById(assignment.getCourtroomId()).orElse(null);
+            Case legalCase = caseMap.get(assignment.getCaseId());
+            Judge judge = judgeMap.get(assignment.getJudgeId());
+            Courtroom courtroom = courtroomMap.get(assignment.getCourtroomId());
 
             if (legalCase == null || judge == null || courtroom == null) {
                 log.warn("Skipping proposal for case {} — entity not found", assignment.getCaseNumber());
                 continue;
             }
 
-            // Persist proposal
             SchedulingProposal proposal = SchedulingProposal.builder()
                     .run(run)
                     .legalCase(legalCase)
@@ -416,10 +675,20 @@ public class SchedulingService {
                     .durationMinutes(assignment.getDurationMinutes())
                     .status(ProposalStatus.PROPOSED)
                     .build();
-            proposal = proposalRepository.save(proposal);
 
-            // Persist decision
-            SchedulingResult.DecisionRecord dec = assignment.getDecision();
+            proposalsToSave.add(proposal);
+            decisionsData.add(assignment.getDecision());
+            validAssignments.add(assignment);
+        }
+
+        List<SchedulingProposal> savedProposals = proposalRepository.saveAll(proposalsToSave);
+        List<com.judicialflow.scheduling.model.SchedulingDecision> decisionsToSave = new ArrayList<>(savedProposals.size());
+
+        for (int i = 0; i < savedProposals.size(); i++) {
+            SchedulingProposal proposal = savedProposals.get(i);
+            SchedulingResult.DecisionRecord dec = decisionsData.get(i);
+            SchedulingResult.ProposedAssignment assignment = validAssignments.get(i);
+
             String constraintsJson;
             try {
                 constraintsJson = objectMapper.writeValueAsString(
@@ -448,10 +717,13 @@ public class SchedulingService {
                 decision.setRunnerUpRejectionReason(dec.getRunnerUpRejectionReason());
             }
 
-            decision = decisionRepository.save(decision);
+            decisionsToSave.add(decision);
+        }
 
-            // Build response
-            responses.add(mapToProposalResponse(proposal, decision));
+        List<com.judicialflow.scheduling.model.SchedulingDecision> savedDecisions = decisionRepository.saveAll(decisionsToSave);
+
+        for (int i = 0; i < savedProposals.size(); i++) {
+            responses.add(mapToProposalResponse(savedProposals.get(i), savedDecisions.get(i)));
         }
 
         return responses;

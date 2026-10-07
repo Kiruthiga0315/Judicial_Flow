@@ -74,4 +74,27 @@ class DurationEstimatorControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string("Models retrained successfully"));
     }
+
+    @Test
+    void testGetModelEvaluations() throws Exception {
+        when(estimatorService.getModelEvaluations()).thenReturn(java.util.Map.of(
+                CaseType.BAIL, com.judicialflow.duration.dto.ModelEvaluationResponse.builder()
+                        .caseType(CaseType.BAIL)
+                        .testMae(12.5)
+                        .baselineMae(25.0)
+                        .beatsBaseline(true)
+                        .trainingSampleCount(100)
+                        .testSampleSize(25)
+                        .validationMethod("80/20 holdout")
+                        .usingBaseline(false)
+                        .baselineMeanDays(45.0)
+                        .build()
+        ));
+
+        mockMvc.perform(get("/api/v1/estimates/models"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.BAIL.beatsBaseline").value(true))
+                .andExpect(jsonPath("$.BAIL.trainingSampleCount").value(100))
+                .andExpect(jsonPath("$.BAIL.usingBaseline").value(false));
+    }
 }

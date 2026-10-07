@@ -33,3 +33,19 @@ The algorithm guarantees determinism. For a given input state (cases, judges, co
 - The greedy pass processes sequentially, so a low-priority case with large duration may be blocked if high-priority cases fragment the schedule (bin-packing fragmentation).
 - Local search is currently basic hill-climbing and prone to getting stuck in local minima, unlike simulated annealing which allows temporary cost increases to escape them.
 - Time blocks are fixed (e.g., 30 min intervals), limiting packing efficiency for very short 5-minute administrative hearings.
+
+## Case Status Lifecycle & Master Brief Alignment
+The system aligns case status values strictly with the JudicialFlow master brief:
+- **`FILED`**: Case newly ingested and awaiting hearing assignment.
+- **`PENDING`**: Historical synonym for `FILED` maintained for backward compatibility.
+- **`SCHEDULED`**: Proposed hearing has been approved/committed to a judge and courtroom slot.
+- **`HEARD`**: Hearing was conducted by the assigned judge.
+- **`ADJOURNED`**: Hearing concluded with an adjournment, bumping prior adjournments count and returning the case to the eligible scheduling pool.
+- **`DISPOSED`**: Case has concluded (judgment delivered or dismissed), completely excluded from scheduling.
+
+Eligible cases for the scheduling engine are filtered using `CaseStatus.isSchedulable()` which includes `FILED`, `PENDING`, and `ADJOURNED`.
+
+## Concurrency Guard Architecture
+The scheduling engine and batch rescheduling pipeline are protected by `SchedulingConcurrencyGuard`:
+- **Current Single-Instance Model**: Employs an in-memory `ReentrantLock` with volatile tracking of the active run ID to avoid inter-thread races with sub-millisecond overhead. This is augmented with a database-level query for active `RUNNING` rows in `scheduling_runs` and a 15-minute stale-run watchdog that cleans up after ungraceful server terminations.
+- **Distributed / Multi-Instance Migration Path**: For horizontal scaling across multiple container replicas, the guard is designed to transition directly to PostgreSQL advisory locking (`SELECT pg_try_advisory_lock(hashtext('judicialflow_scheduling_guard'))`) or ShedLock, ensuring cluster-wide transactional mutual exclusion directly inside PostgreSQL.

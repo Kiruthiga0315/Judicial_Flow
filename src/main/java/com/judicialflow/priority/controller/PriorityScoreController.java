@@ -33,7 +33,7 @@ import java.util.UUID;
  * </ul>
  */
 @RestController
-@RequestMapping("/api/priority")
+@RequestMapping("/api/v1/priority")
 @RequiredArgsConstructor
 @Tag(name = "Priority Scoring",
         description = "Explainable urgency scoring for open cases — "
@@ -87,6 +87,27 @@ public class PriorityScoreController {
             @PathVariable UUID caseId) {
         PriorityScoreResult result = priorityScoreService.getOrComputeLatest(caseId);
         return ResponseEntity.ok(result);
+    }
+
+    // -------------------------------------------------------------------------
+    // Single-case: score history
+    // -------------------------------------------------------------------------
+
+    @GetMapping("/cases/{caseId}/history")
+    @Operation(
+            summary = "Retrieve priority score history for a case",
+            description = "Returns all historical score computations for a case, newest first.")
+    @ApiResponse(responseCode = "200",
+            description = "Score history returned",
+            content = @Content(schema = @Schema(implementation = PriorityScoreResult.class)))
+    @ApiResponse(responseCode = "404",
+            description = "Case not found or soft-deleted",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<List<PriorityScoreResult>> getScoreHistory(
+            @Parameter(description = "UUID of the case")
+            @PathVariable UUID caseId) {
+        List<PriorityScoreResult> history = priorityScoreService.getScoreHistory(caseId);
+        return ResponseEntity.ok(history);
     }
 
     // -------------------------------------------------------------------------

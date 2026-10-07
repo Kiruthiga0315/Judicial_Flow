@@ -1,29 +1,48 @@
-# Case Duration Estimator (Phase 5)
+# Case Duration Estimator (Phase 5 & Phase 9.B)
+
+> **Disclaimer**: All models are trained and evaluated on synthetic data generated under declared assumptions. Metrics reflect synthetic generator dynamics, not empirical court delay forecasting.
 
 ## Overview
-The Duration Estimator provides a realistic expected-resolution-timeline estimate for cases in the JudicialFlow system. Instead of simply generating an arbitrary "next date", this module calculates a predicted duration (in days) using historical data.
+The Duration Estimator provides an expected-resolution timeline for cases in JudicialFlow. For interpretability and algorithmic auditability, we use Ordinary Least Squares (OLS) **Simple Linear Regression** grouped by `CaseType`, predicting case resolution timeline from filing date to disposal date based on `priorAdjournments`.
 
-## Methodology
-To ensure interpretability and defensibility, we use a **Simple Linear Regression** model. We chose *not* to build a complex ML pipeline to avoid over-engineering. The model is implemented directly in pure Java, avoiding external dependencies and complex matrix inversions by using Ordinary Least Squares (OLS) regression for a single variable grouped by case type.
+## Training and Validation Split
+To prevent overoptimistic evaluation, models are trained and validated using stratified historical disposed cases:
+1. **Large Subsets ($\ge 30$ cases)**:
+   - Evaluated using a strict **80/20 train/test holdout split** shuffled with a fixed reproducible random seed (default: 42).
+   - Test MAE is computed strictly on the held-out 20% test slice.
+2. **Small Subsets (8 to 29 cases)**:
+   - Evaluated using **Leave-One-Out Cross-Validation (LOOCV)** across all available cases.
+3. **Insufficient Data ($< 8$ cases)**:
+   - No regression model is trained. The system uses a generic default (180 days predicted, 90 days MAE window) and explicitly labels the output as `"fallback, insufficient data"`.
 
-### How it Works
-1. **Grouping by Case Type:** A separate linear regression model is trained for each `CaseType` (e.g., CIVIL, CRIMINAL, BAIL).
-2. **Feature & Target:** 
-   * **Feature (X):** `priorAdjournments` count.
-   * **Target (Y):** Actual duration from `filingDate` to `disposedDate` (in days).
-3. **Training Data:** The models are trained on the synthetic dataset generated in Phase 1 (i.e., cases with `status = DISPOSED`).
-4. **Prediction:** Given a new or active case, the system retrieves the model for that `CaseType` and predicts the duration based on its current `priorAdjournments`.
+## Baseline Comparison and Fallback Rule
+For each case type, the regression model's Test MAE is compared against a **naive per-type-mean baseline** (predicting the mean duration of the training set for every case):
+$$\text{Baseline MAE} = \frac{1}{|D_{\text{test}}|} \sum_{i \in D_{\text{test}}} |y_i - \bar{y}_{\text{train}}|$$
 
-### Endpoint
-The REST endpoint `GET /api/v1/estimates/cases/{caseId}` returns a realistic estimate, including:
-* `predictedDurationDays`: The exact output of the linear regression.
-* `minDurationDays` / `maxDurationDays`: A date range created using the Mean Absolute Error (MAE) of the model.
-* `basis`: Explainability text indicating the sample size and model features.
-* `topFeatures`: Highlights the variables driving the estimate (CaseType and PriorAdjournments).
+- **If the model beats the baseline ($\text{Test MAE} < \text{Baseline MAE}$)**:
+  - The OLS regression equation is used for predictions: $\hat{y} = \beta_0 + \beta_1 \cdot \text{adjournments}$.
+  - `beatsBaseline` is reported as `true`.
+- **If the model does NOT beat the baseline ($\text{Test MAE} \ge \text{Baseline MAE}$)**:
+  - The model **remains strictly on the naive per-type-mean baseline**: $\hat{y} = \bar{y}_{\text{train}}$, with MAE set to the baseline MAE.
+  - `beatsBaseline` is reported as `false`.
+  - The `basis` explanation explicitly states: `"Model did not beat naive per-type-mean baseline (...); keeping type on naive mean baseline (... days) based on N training cases."`
 
-## Honest Evaluation & Limitations
-- **Data Source Limitation:** The model learns from *synthetic* data. Therefore, the predictions heavily reflect the data generator's assumptions from Phase 1 rather than real-world court dynamics.
-- **Model Simplicity:** As a simple linear regression based solely on prior adjournments, the model assumes a linear relationship between adjournments and total case duration. It does not account for complex non-linear dynamics, varying judge loads across different jurisdictions, or case-specific complexities.
-- **Accuracy (MAE):** Based on evaluations with the synthetic data, the Mean Absolute Error varies by case type (often predicting within a reasonable window, but defaulting to a generic 90-day MAE fallback when insufficient historical data exists). This error metric provides a bounding box for the `minDurationDays` and `maxDurationDays`.
+## API Endpoints
+1. `GET /api/v1/estimates/cases/{caseId}`
+   - `predictedDurationDays`: Estimated resolution days (or baseline mean).
+   - `minDurationDays` / `maxDurationDays`: Clamped lower and upper bounds $[\max(1, \hat{y} - \text{MAE}), \max(1, \hat{y} + \text{MAE})]$.
+   - `basis`: Full disclosure text including training sample count, holdout size, validation method, and baseline comparison.
+   - `testMae`: Test MAE on the holdout evaluation set.
+   - `baselineMaeDays`: Naive per-type-mean baseline MAE.
+   - `beatsBaseline`: Boolean flag indicating whether the regression beat the baseline.
+   - `trainingSampleCount`: Exact number of disposed cases used for training.
+2. `GET /api/v1/estimates/models`
+   - Returns a dictionary of all case types with their evaluation status, sample sizes, Test MAE, Baseline MAE, and whether the naive baseline is active.
+3. `POST /api/v1/estimates/train`
+   - Triggers model retraining on demand.
 
-*Computed using plain Java Simple Linear Regression. No external ML dependencies.*
+## Known Limitations & Circularity Caveat
+- **Synthetic Data**: Predictions reflect synthetic caseload relationships, not real-world judicial processes.
+- **Circular Feature Generation**: In the synthetic caseload generator (`SyntheticCaseGeneratorController.java`), `priorAdjournments` for disposed cases is generated directly as a function of disposal duration: `adjournments = (duration / 60) + noise`. Consequently, when linear regression fits `duration` on `priorAdjournments`, the predictive performance is an artifact of the generator's formula. This gain is circular and must not be interpreted as empirical predictive power.
+- **Survivor / Feature Leakage**: Active cases have fewer adjournments at filing than at disposal; estimating an active case's total duration from intermediate adjournment count introduces feature leakage. This is disclosed directly in the API's `topFeatures` string.
+

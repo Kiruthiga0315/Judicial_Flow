@@ -44,6 +44,10 @@ public class Hearing {
     @Column(nullable = false)
     private HearingStatus status;
 
+    @Builder.Default
+    @Column(name = "created_by_engine", nullable = false)
+    private boolean createdByEngine = false;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

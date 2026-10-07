@@ -19,7 +19,7 @@ import java.util.UUID;
 @Schema(description = "Filter criteria for listing cases")
 public class CaseFilterCriteria {
 
-    @Schema(description = "Filter by case status", example = "PENDING")
+    @Schema(description = "Filter by case status", example = "FILED")
     private CaseStatus status;
 
     @Schema(description = "Filter by case type", example = "CIVIL")

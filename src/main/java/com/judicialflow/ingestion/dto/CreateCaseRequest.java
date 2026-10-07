@@ -35,7 +35,7 @@ public class CreateCaseRequest {
     @Schema(description = "Date when the case was officially filed", example = "2024-01-15")
     private LocalDate filingDate;
 
-    @Schema(description = "Initial status of the case. Defaults to PENDING if omitted.", example = "PENDING")
+    @Schema(description = "Initial status of the case. Defaults to FILED if omitted.", example = "FILED")
     private CaseStatus currentStatus;
 
     @Min(value = 0, message = "Prior adjournments cannot be negative")
@@ -48,4 +48,10 @@ public class CreateCaseRequest {
 
     @Schema(description = "Optional UUID of the assigned judge", example = "b1ffcd11-9c0b-4ef8-bb6d-6bb9bd380b22")
     private UUID assignedJudgeId;
+
+    @Schema(description = "Optional statutory deadline date", example = "2024-06-30")
+    private LocalDate statutoryDeadline;
+
+    @Schema(description = "Optional contact email of the litigant", example = "litigant@example.com")
+    private String litigantContactEmail;
 }

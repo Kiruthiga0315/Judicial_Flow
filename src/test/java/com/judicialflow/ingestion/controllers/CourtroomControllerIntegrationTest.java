@@ -22,6 +22,9 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
+@WithMockUser(roles = "REGISTRAR")
 class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -49,7 +52,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
                 .build();
 
         // 1. Create Courtroom
-        String createResponse = mockMvc.perform(post("/api/courtrooms")
+        String createResponse = mockMvc.perform(post("/api/v1/courtrooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createReq)))
                 .andExpect(status().isCreated())
@@ -64,7 +67,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
         UUID courtroomId = UUID.fromString(courtroomIdStr);
 
         // 2. Get Courtroom by ID
-        mockMvc.perform(get("/api/courtrooms/{id}", courtroomId))
+        mockMvc.perform(get("/api/v1/courtrooms/{id}", courtroomId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(courtroomIdStr))
                 .andExpect(jsonPath("$.name").value("Court Hall 101"));
@@ -75,7 +78,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
                 .capacity(90)
                 .build();
 
-        mockMvc.perform(put("/api/courtrooms/{id}", courtroomId)
+        mockMvc.perform(put("/api/v1/courtrooms/{id}", courtroomId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateReq)))
                 .andExpect(status().isOk())
@@ -95,7 +98,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
                 .availability(List.of(window, window2))
                 .build();
 
-        mockMvc.perform(put("/api/courtrooms/{id}/availability", courtroomId)
+        mockMvc.perform(put("/api/v1/courtrooms/{id}/availability", courtroomId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(setReq)))
                 .andExpect(status().isOk())
@@ -104,7 +107,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.availability[1].dayOfWeek").value("THURSDAY"));
 
         // 5. List Courtrooms with pagination
-        mockMvc.perform(get("/api/courtrooms?page=0&size=5&sort=name,asc"))
+        mockMvc.perform(get("/api/v1/courtrooms?page=0&size=5&sort=name,asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.totalElements").value(1));
@@ -118,7 +121,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
                 .capacity(50)
                 .build();
 
-        mockMvc.perform(post("/api/courtrooms")
+        mockMvc.perform(post("/api/v1/courtrooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidReq)))
                 .andExpect(status().isBadRequest())
@@ -134,7 +137,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
                 .capacity(0) // must be at least 1
                 .build();
 
-        mockMvc.perform(post("/api/courtrooms")
+        mockMvc.perform(post("/api/v1/courtrooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidReq)))
                 .andExpect(status().isBadRequest())
@@ -146,7 +149,7 @@ class CourtroomControllerIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("Validation Failure 3: Non-existent courtroom ID returns 404 Not Found")
     void testGetNonExistentCourtroomReturns404() throws Exception {
         UUID nonExistentId = UUID.randomUUID();
-        mockMvc.perform(get("/api/courtrooms/{id}", nonExistentId))
+        mockMvc.perform(get("/api/v1/courtrooms/{id}", nonExistentId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message", containsString("Courtroom not found with id: " + nonExistentId)));

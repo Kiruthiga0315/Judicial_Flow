@@ -47,14 +47,19 @@ class PriorityScoreCalculatorTest {
 
     /** Convenience: build a minimal Case with a given type, filing date, adjournments, linked. */
     private Case buildCase(CaseType type, LocalDate filingDate, int adjournments, Case linkedCase) {
+        return buildCase(type, filingDate, adjournments, linkedCase, null);
+    }
+
+    private Case buildCase(CaseType type, LocalDate filingDate, int adjournments, Case linkedCase, LocalDate statutoryDeadline) {
         return Case.builder()
                 .id(UUID.randomUUID())
                 .caseNumber("TEST-2024-" + type.name())
                 .caseType(type)
                 .filingDate(filingDate)
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .priorAdjournments(adjournments)
                 .linkedCase(linkedCase)
+                .statutoryDeadline(statutoryDeadline)
                 .deleted(false)
                 .build();
     }
@@ -101,7 +106,7 @@ class PriorityScoreCalculatorTest {
             assertThat(result.getTotalScore()).isEqualByComparingTo("75.0000");
 
             // And – factor breakdown assertions
-            assertThat(result.getFactors()).hasSize(4);
+            assertThat(result.getFactors()).hasSize(5);
 
             ScoreFactorBreakdown typeF = factor(result, "Case Type Urgency");
             assertThat(typeF.getContribution()).isEqualByComparingTo("50.0000");
@@ -378,11 +383,11 @@ class PriorityScoreCalculatorTest {
     class ResultStructureTests {
 
         @Test
-        @DisplayName("Result always contains exactly 4 factors")
-        void alwaysFourFactors() {
+        @DisplayName("Result always contains exactly 5 factors")
+        void alwaysFiveFactors() {
             Case legalCase = buildCase(CaseType.CRIMINAL_OTHER, LocalDate.now().minusDays(5), 1, null);
             PriorityScoreResult result = calculator.calculate(legalCase);
-            assertThat(result.getFactors()).hasSize(4);
+            assertThat(result.getFactors()).hasSize(5);
         }
 
         @Test
@@ -431,6 +436,73 @@ class PriorityScoreCalculatorTest {
             Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now().minusDays(10), 0, null);
             PriorityScoreResult result = calculator.calculate(legalCase);
             assertThat(result.getPersistedScoreId()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("Fix 3: Statutory deadline & edge-case unit tests")
+    class StatutoryDeadlineEdgeCaseTests {
+
+        @Test
+        @DisplayName("no deadline: contributes 0.00 points")
+        void testNoDeadline() {
+            Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now().minusDays(10), 1, null, null);
+            PriorityScoreResult result = calculator.calculate(legalCase);
+            ScoreFactorBreakdown f = factor(result, "Statutory Deadline Proximity");
+            assertThat(f.getContribution()).isEqualByComparingTo("0.0000");
+            assertThat(f.getExplanation()).contains("No statutory deadline set");
+        }
+
+        @Test
+        @DisplayName("deadline in 3 days: escalating proximity bonus applied")
+        void testDeadlineInThreeDays() {
+            Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now().minusDays(10), 0, null, LocalDate.now().plusDays(3));
+            PriorityScoreResult result = calculator.calculate(legalCase);
+            ScoreFactorBreakdown f = factor(result, "Statutory Deadline Proximity");
+            // 30 - (3 * 2) = 24.0000
+            assertThat(f.getContribution()).isEqualByComparingTo("24.0000");
+            assertThat(f.getExplanation()).contains("in 3 day(s)");
+        }
+
+        @Test
+        @DisplayName("deadline already passed: max urgency bonus applied")
+        void testDeadlineAlreadyPassed() {
+            Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now().minusDays(10), 0, null, LocalDate.now().minusDays(4));
+            PriorityScoreResult result = calculator.calculate(legalCase);
+            ScoreFactorBreakdown f = factor(result, "Statutory Deadline Proximity");
+            assertThat(f.getContribution()).isEqualByComparingTo("30.0000");
+            assertThat(f.getExplanation()).contains("expired 4 day(s) ago");
+        }
+
+        @Test
+        @DisplayName("zero adjournments: contributes 0.00 points")
+        void testZeroAdjournments() {
+            Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now().minusDays(10), 0, null, null);
+            PriorityScoreResult result = calculator.calculate(legalCase);
+            ScoreFactorBreakdown f = factor(result, "Prior Adjournments");
+            assertThat(f.getContribution()).isEqualByComparingTo("0.0000");
+            assertThat(f.getExplanation()).contains("No prior adjournments recorded");
+        }
+
+        @Test
+        @DisplayName("brand-new case: 0 days pending, 0 adjournments, no deadline")
+        void testBrandNewCase() {
+            Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now(), 0, null, null);
+            PriorityScoreResult result = calculator.calculate(legalCase);
+            // Civil: 10 base, 0 aging, 0 adj, 0 deadline, 0 linked = 10.0000
+            assertThat(result.getTotalScore()).isEqualByComparingTo("10.0000");
+            ScoreFactorBreakdown aging = factor(result, "Time Pending (Aging)");
+            assertThat(aging.getContribution()).isEqualByComparingTo("0.0000");
+        }
+
+        @Test
+        @DisplayName("very old case: aging is capped at maxAgingContribution")
+        void testVeryOldCase() {
+            Case legalCase = buildCase(CaseType.CIVIL, LocalDate.now().minusDays(2000), 0, null, null);
+            PriorityScoreResult result = calculator.calculate(legalCase);
+            ScoreFactorBreakdown aging = factor(result, "Time Pending (Aging)");
+            assertThat(aging.getContribution()).isEqualByComparingTo(defaultWeights.getMaxAgingContribution());
+            assertThat(aging.getExplanation()).contains("capped at");
         }
     }
 }

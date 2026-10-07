@@ -293,9 +293,35 @@ public class SchedulingEngine {
                                                    HardConstraintChecker checker, 
                                                    int duration) {
         List<CandidateSlot> validCandidates = new ArrayList<>();
-        for (SchedulingInput.JudgeInfo judge : judges) {
+        LocalDate lastCandidateDay = null;
+
+        for (LocalDateTime slot : timeSlots) {
+            LocalDate slotDay = slot.toLocalDate();
+            if (lastCandidateDay != null && !slotDay.equals(lastCandidateDay)) {
+                if (validCandidates.size() >= 30) {
+                    break;
+                }
+            }
+
             for (SchedulingInput.CourtroomInfo cr : courtrooms) {
-                for (LocalDateTime slot : timeSlots) {
+                if (!checker.isCourtroomFree(cr.getCourtroomId(), slot, duration)) {
+                    continue;
+                }
+                if (!checker.isWithinCourtroomAvailability(cr.getCourtroomId(), slot, duration, courtrooms)) {
+                    continue;
+                }
+
+                for (SchedulingInput.JudgeInfo judge : judges) {
+                    if (!checker.isJudgeFree(judge.getJudgeId(), slot, duration)) {
+                        continue;
+                    }
+                    if (!checker.isWithinJudgeAvailability(judge.getJudgeId(), slot, duration, judges)) {
+                        continue;
+                    }
+                    if (!checker.isLinkedCaseSequencingValid(caseInfo, slot)) {
+                        continue;
+                    }
+
                     CandidateSlot candidate = CandidateSlot.builder()
                         .judgeId(judge.getJudgeId())
                         .judgeName(judge.getJudgeName())
@@ -304,11 +330,9 @@ public class SchedulingEngine {
                         .startTime(slot)
                         .durationMinutes(duration)
                         .build();
-                        
-                    List<String> violations = checker.checkAll(candidate, duration, caseInfo, judges, courtrooms);
-                    if (violations.isEmpty()) {
-                        validCandidates.add(candidate);
-                    }
+
+                    validCandidates.add(candidate);
+                    lastCandidateDay = slotDay;
                 }
             }
         }

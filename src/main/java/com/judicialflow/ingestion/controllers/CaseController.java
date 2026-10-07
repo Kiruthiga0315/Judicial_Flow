@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/cases")
+@RequestMapping("/api/v1/cases")
 @RequiredArgsConstructor
 @Tag(name = "Cases", description = "Endpoints for managing legal cases, metadata, linked cases, and lifecycle statuses")
 public class CaseController {
@@ -72,6 +72,15 @@ public class CaseController {
             @PageableDefault(size = 20, sort = "filingDate", direction = Sort.Direction.DESC) Pageable pageable) {
         PageResponse<CaseResponse> response = caseService.listCases(criteria, pageable);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/aging-report")
+    @Operation(summary = "Get at-risk cases aging report",
+            description = "Returns open cases sorted by urgency priority score descending with days pending, adjournments, deadline proximity, and status.")
+    public ResponseEntity<java.util.List<AgingReportItem>> getAgingReport(
+            @RequestParam(required = false) com.judicialflow.common.enums.CaseType caseType,
+            @RequestParam(required = false, defaultValue = "100") Integer limit) {
+        return ResponseEntity.ok(caseService.getAgingReport(caseType, limit));
     }
 
     @DeleteMapping("/{id}")

@@ -93,6 +93,20 @@ public class PriorityScoreService {
     }
 
     /**
+     * Retrieve all historical score calculations for a case, newest first.
+     */
+    @Transactional(readOnly = true)
+    public List<PriorityScoreResult> getScoreHistory(UUID caseId) {
+        Case legalCase = caseRepository.findByIdAndDeletedFalse(caseId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Case not found with id: " + caseId));
+
+        return priorityScoreRepository.findAllByCaseIdOrderByComputedAtDesc(caseId).stream()
+                .map(ps -> mapToResult(legalCase, ps))
+                .toList();
+    }
+
+    /**
      * Compute fresh scores for ALL non-deleted, non-disposed open cases and
      * return the top {@code limit} by score descending.
      *
@@ -132,6 +146,29 @@ public class PriorityScoreService {
                 .toList();
     }
 
+    /**
+     * Compute fresh scores for ALL non-deleted, non-disposed open cases.
+     * Returns the full list of computed results.
+     */
+    @Transactional
+    public List<PriorityScoreResult> computeAllOpenCases(String triggeredBy) {
+        List<Case> openCases = caseRepository.findAll().stream()
+                .filter(c -> !c.isDeleted())
+                .filter(c -> c.getCurrentStatus() != CaseStatus.DISPOSED)
+                .toList();
+
+        log.info("Computing scores for all {} open non-disposed cases (triggeredBy={})",
+                openCases.size(), triggeredBy);
+
+        return openCases.stream()
+                .map(c -> {
+                    PriorityScoreResult r = calculator.calculate(c);
+                    PriorityScore ps = persist(c, r, triggeredBy != null ? triggeredBy : "NIGHTLY_BATCH");
+                    return withPersistedId(r, ps.getId());
+                })
+                .toList();
+    }
+
     // =========================================================================
     // Private helpers
     // =========================================================================
@@ -149,6 +186,7 @@ public class PriorityScoreService {
         String explanationJson = serializeBreakdown(result);
 
         BigDecimal linkedBonus = factorContribution(result, "Linked Case Status");
+        BigDecimal deadlineBonus = factorContribution(result, "Statutory Deadline Proximity");
 
         PriorityScore entity = PriorityScore.builder()
                 .legalCase(legalCase)
@@ -157,6 +195,7 @@ public class PriorityScoreService {
                 .ageMultiplier(aging)             // mapped: aging contribution → age multiplier
                 .adjournmentBoost(adjournment)  // mapped: adjournment contribution
                 .linkedCaseBonus(linkedBonus)     // mapped: linked-case bonus
+                .statutoryDeadlineBonus(deadlineBonus)
                 .explanation(explanationJson)
                 .triggeredBy(triggeredBy)
                 .build();

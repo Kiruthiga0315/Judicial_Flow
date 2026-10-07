@@ -48,4 +48,10 @@ public class UpdateCaseRequest {
 
     @Schema(description = "Optional UUID of the assigned judge", example = "b1ffcd11-9c0b-4ef8-bb6d-6bb9bd380b22")
     private UUID assignedJudgeId;
+
+    @Schema(description = "Optional statutory deadline date", example = "2024-06-30")
+    private LocalDate statutoryDeadline;
+
+    @Schema(description = "Optional contact email of the litigant", example = "litigant@example.com")
+    private String litigantContactEmail;
 }

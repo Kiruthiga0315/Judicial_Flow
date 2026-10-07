@@ -22,6 +22,17 @@ import java.util.UUID;
 public class JudgeService {
 
     private final JudgeRepository judgeRepository;
+    private final com.judicialflow.audit.AuditService auditService;
+
+    private java.util.Map<String, Object> judgeToState(Judge j) {
+        if (j == null) return null;
+        java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("id", j.getId().toString());
+        map.put("name", j.getName());
+        map.put("specialization", j.getSpecialization());
+        map.put("availabilityWindows", j.getAvailabilityWindows());
+        return map;
+    }
 
     @Transactional
     public JudgeResponse createJudge(CreateJudgeRequest request) {
@@ -35,6 +46,8 @@ public class JudgeService {
                 .build();
 
         Judge saved = judgeRepository.save(judge);
+        auditService.log("Judge", saved.getId().toString(), "CREATE", "JUDGE_CREATED",
+                null, judgeToState(saved), "Created judge " + saved.getName());
         return JudgeResponse.fromEntity(saved);
     }
 
@@ -44,10 +57,14 @@ public class JudgeService {
         Judge judge = judgeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Judge not found with id: " + id));
 
+        java.util.Map<String, Object> beforeState = judgeToState(judge);
+
         judge.setName(request.getName().trim());
         judge.setSpecialization(request.getSpecialization());
 
         Judge saved = judgeRepository.save(judge);
+        auditService.log("Judge", saved.getId().toString(), "UPDATE", "JUDGE_UPDATED",
+                beforeState, judgeToState(saved), "Updated judge " + saved.getName());
         return JudgeResponse.fromEntity(saved);
     }
 
@@ -71,10 +88,14 @@ public class JudgeService {
         Judge judge = judgeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Judge not found with id: " + id));
 
+        java.util.Map<String, Object> beforeState = judgeToState(judge);
+
         validateAvailabilityWindows(request.getAvailabilityWindows());
         judge.setAvailabilityWindows(request.getAvailabilityWindows() != null ? request.getAvailabilityWindows() : List.of());
 
         Judge saved = judgeRepository.save(judge);
+        auditService.log("Judge", saved.getId().toString(), "UPDATE", "JUDGE_AVAILABILITY_UPDATED",
+                beforeState, judgeToState(saved), "Updated availability windows for judge " + saved.getName());
         return JudgeResponse.fromEntity(saved);
     }
 

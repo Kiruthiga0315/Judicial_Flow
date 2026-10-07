@@ -83,6 +83,11 @@ public class PriorityScore {
     @Column(nullable = false, precision = 10, scale = 4)
     private BigDecimal linkedCaseBonus = BigDecimal.ZERO;
 
+    /** Statutory deadline proximity bonus (added in V10 migration). */
+    @Builder.Default
+    @Column(name = "statutory_deadline_bonus", nullable = false, precision = 10, scale = 4)
+    private BigDecimal statutoryDeadlineBonus = BigDecimal.ZERO;
+
     /**
      * JSON-serialised {@code List<ScoreFactorBreakdown>} — the full explainability
      * payload.  Stored as TEXT so historical records are self-documenting and the

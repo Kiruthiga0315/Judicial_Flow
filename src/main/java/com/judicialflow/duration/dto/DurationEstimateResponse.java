@@ -17,5 +17,6 @@ public class DurationEstimateResponse {
     private double testMae;
     private double baselineMaeDays;
     private boolean beatsBaseline;
+    private Integer trainingSampleCount;
     private LocalDateTime computedAt;
 }

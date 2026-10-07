@@ -22,6 +22,17 @@ import java.util.UUID;
 public class CourtroomService {
 
     private final CourtroomRepository courtroomRepository;
+    private final com.judicialflow.audit.AuditService auditService;
+
+    private java.util.Map<String, Object> courtroomToState(Courtroom c) {
+        if (c == null) return null;
+        java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("id", c.getId().toString());
+        map.put("name", c.getName());
+        map.put("capacity", c.getCapacity());
+        map.put("availability", c.getAvailability());
+        return map;
+    }
 
     @Transactional
     public CourtroomResponse createCourtroom(CreateCourtroomRequest request) {
@@ -38,6 +49,8 @@ public class CourtroomService {
                 .build();
 
         Courtroom saved = courtroomRepository.save(courtroom);
+        auditService.log("Courtroom", saved.getId().toString(), "CREATE", "COURTROOM_CREATED",
+                null, courtroomToState(saved), "Created courtroom " + saved.getName());
         return CourtroomResponse.fromEntity(saved);
     }
 
@@ -47,6 +60,8 @@ public class CourtroomService {
         Courtroom courtroom = courtroomRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Courtroom not found with id: " + id));
 
+        java.util.Map<String, Object> beforeState = courtroomToState(courtroom);
+
         if (request.getCapacity() <= 0) {
             throw new ValidationException("Courtroom capacity must be greater than zero");
         }
@@ -55,6 +70,8 @@ public class CourtroomService {
         courtroom.setCapacity(request.getCapacity());
 
         Courtroom saved = courtroomRepository.save(courtroom);
+        auditService.log("Courtroom", saved.getId().toString(), "UPDATE", "COURTROOM_UPDATED",
+                beforeState, courtroomToState(saved), "Updated courtroom " + saved.getName());
         return CourtroomResponse.fromEntity(saved);
     }
 
@@ -78,6 +95,8 @@ public class CourtroomService {
         Courtroom courtroom = courtroomRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Courtroom not found with id: " + id));
 
+        java.util.Map<String, Object> beforeState = courtroomToState(courtroom);
+
         if (request.getCapacity() != null) {
             if (request.getCapacity() <= 0) {
                 throw new ValidationException("Courtroom capacity must be greater than zero");
@@ -91,6 +110,8 @@ public class CourtroomService {
         }
 
         Courtroom saved = courtroomRepository.save(courtroom);
+        auditService.log("Courtroom", saved.getId().toString(), "UPDATE", "COURTROOM_AVAILABILITY_UPDATED",
+                beforeState, courtroomToState(saved), "Updated availability and capacity for courtroom " + saved.getName());
         return CourtroomResponse.fromEntity(saved);
     }
 

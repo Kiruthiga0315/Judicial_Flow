@@ -28,6 +28,9 @@ public class SchedulingConfig {
     /** Soft constraint weights (sum should be 1.0 for interpretability). */
     private SoftWeights softWeights = new SoftWeights();
 
+    /** Nightly rescheduling batch job settings. */
+    private NightlyJob nightlyJob = new NightlyJob();
+
     @Data
     public static class SoftWeights {
         /** Weight for priority ordering: higher-priority cases get earlier slots. */
@@ -38,5 +41,11 @@ public class SchedulingConfig {
 
         /** Weight for minimizing schedule churn versus previous run. */
         private double scheduleChurn = 0.2;
+    }
+
+    @Data
+    public static class NightlyJob {
+        private String cron = "0 0 2 * * ?";
+        private boolean enabled = true;
     }
 }

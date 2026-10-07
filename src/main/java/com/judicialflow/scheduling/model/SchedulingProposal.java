@@ -65,6 +65,9 @@ public class SchedulingProposal {
     @Column(nullable = false)
     private ProposalStatus status = ProposalStatus.PROPOSED;
 
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

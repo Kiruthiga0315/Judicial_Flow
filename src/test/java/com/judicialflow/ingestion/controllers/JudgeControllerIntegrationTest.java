@@ -22,13 +22,24 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
+@WithMockUser(roles = "REGISTRAR")
 class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private JudgeRepository judgeRepository;
 
+    @Autowired
+    private com.judicialflow.common.HearingRepository hearingRepository;
+
+    @Autowired
+    private com.judicialflow.common.CaseRepository caseRepository;
+
     @BeforeEach
     void setUp() {
+        hearingRepository.deleteAll();
+        caseRepository.deleteAll();
         judgeRepository.deleteAll();
     }
 
@@ -49,7 +60,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
                 .build();
 
         // 1. Create Judge
-        String createResponse = mockMvc.perform(post("/api/judges")
+        String createResponse = mockMvc.perform(post("/api/v1/judges")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createReq)))
                 .andExpect(status().isCreated())
@@ -65,7 +76,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
         UUID judgeId = UUID.fromString(judgeIdStr);
 
         // 2. Get Judge by ID
-        mockMvc.perform(get("/api/judges/{id}", judgeId))
+        mockMvc.perform(get("/api/v1/judges/{id}", judgeId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(judgeIdStr))
                 .andExpect(jsonPath("$.name").value("Hon. Justice A. K. Sikri"));
@@ -76,7 +87,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
                 .specialization("Constitutional Bench")
                 .build();
 
-        mockMvc.perform(put("/api/judges/{id}", judgeId)
+        mockMvc.perform(put("/api/v1/judges/{id}", judgeId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateReq)))
                 .andExpect(status().isOk())
@@ -95,7 +106,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
                 .availabilityWindows(List.of(window, window2))
                 .build();
 
-        mockMvc.perform(put("/api/judges/{id}/availability", judgeId)
+        mockMvc.perform(put("/api/v1/judges/{id}/availability", judgeId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(availReq)))
                 .andExpect(status().isOk())
@@ -103,7 +114,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.availabilityWindows[1].dayOfWeek").value("WEDNESDAY"));
 
         // 5. List Judges with pagination
-        mockMvc.perform(get("/api/judges?page=0&size=10&sort=name,asc"))
+        mockMvc.perform(get("/api/v1/judges?page=0&size=10&sort=name,asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.totalElements").value(1))
@@ -118,7 +129,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
                 .specialization("Criminal")
                 .build();
 
-        mockMvc.perform(post("/api/judges")
+        mockMvc.perform(post("/api/v1/judges")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidReq)))
                 .andExpect(status().isBadRequest())
@@ -145,7 +156,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
                 .availabilityWindows(List.of(invalidWindow))
                 .build();
 
-        mockMvc.perform(put("/api/judges/{id}/availability", judge.getId())
+        mockMvc.perform(put("/api/v1/judges/{id}/availability", judge.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -157,7 +168,7 @@ class JudgeControllerIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("Validation Failure 3: Non-existent judge ID returns 404 Not Found")
     void testGetNonExistentJudgeReturns404() throws Exception {
         UUID nonExistentId = UUID.randomUUID();
-        mockMvc.perform(get("/api/judges/{id}", nonExistentId))
+        mockMvc.perform(get("/api/v1/judges/{id}", nonExistentId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message", containsString("Judge not found with id: " + nonExistentId)));

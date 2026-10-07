@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/courtrooms")
+@RequestMapping("/api/v1/courtrooms")
 @RequiredArgsConstructor
 @Tag(name = "Courtrooms", description = "Endpoints for managing courtrooms, capacities, and scheduling availability")
 public class CourtroomController {

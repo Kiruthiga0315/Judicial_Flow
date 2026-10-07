@@ -25,7 +25,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * verifies the HTTP responses — including the breakdown structure returned by the
  * API.
  */
+import org.springframework.security.test.context.support.WithMockUser;
+
 @DisplayName("PriorityScoreController integration tests")
+@WithMockUser(roles = "REGISTRAR")
 class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -34,8 +37,20 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private PriorityScoreRepository priorityScoreRepository;
 
+    @Autowired
+    private com.judicialflow.scheduling.repository.SchedulingProposalRepository proposalRepository;
+
+    @Autowired
+    private com.judicialflow.scheduling.repository.SchedulingRunRepository runRepository;
+
+    @Autowired
+    private com.judicialflow.common.HearingRepository hearingRepository;
+
     @BeforeEach
     void cleanUp() {
+        hearingRepository.deleteAll();
+        proposalRepository.deleteAll();
+        runRepository.deleteAll();
         priorityScoreRepository.deleteAll();
         caseRepository.deleteAll();
     }
@@ -65,15 +80,15 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("GET /score: returns 200 with score and 4-factor breakdown for a BAIL case")
     void computeScoreForBailCase() throws Exception {
         Case legalCase = seedCase("BAIL-INT-001", CaseType.BAIL,
-                LocalDate.now().minusDays(100), 2, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(100), 2, null, CaseStatus.FILED);
 
-        mockMvc.perform(get("/api/priority/cases/{id}/score", legalCase.getId()))
+        mockMvc.perform(get("/api/v1/priority/cases/{id}/score", legalCase.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.caseId").value(legalCase.getId().toString()))
                 .andExpect(jsonPath("$.caseNumber").value("BAIL-INT-001"))
                 .andExpect(jsonPath("$.totalScore").value(closeTo(70.0, 0.001)))
-                // Breakdown must have 4 factors
-                .andExpect(jsonPath("$.factors", hasSize(4)))
+                // Breakdown must have 5 factors
+                .andExpect(jsonPath("$.factors", hasSize(5)))
                 // Highest factor must be case type urgency (50) – factors sorted desc
                 .andExpect(jsonPath("$.factors[0].factorName").value("Case Type Urgency"))
                 .andExpect(jsonPath("$.factors[0].contribution").value(closeTo(50.0, 0.001)))
@@ -87,9 +102,9 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("GET /score: persists a row to priority_scores table")
     void computeScorePersiststoDb() throws Exception {
         Case legalCase = seedCase("POCSO-INT-001", CaseType.POCSO,
-                LocalDate.now().minusDays(50), 0, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(50), 0, null, CaseStatus.FILED);
 
-        mockMvc.perform(get("/api/priority/cases/{id}/score", legalCase.getId()))
+        mockMvc.perform(get("/api/v1/priority/cases/{id}/score", legalCase.getId()))
                 .andExpect(status().isOk());
 
         // DB should now have one record for this case
@@ -104,7 +119,7 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("GET /score: returns 404 for unknown case ID")
     void computeScoreUnknownCase() throws Exception {
-        mockMvc.perform(get("/api/priority/cases/{id}/score",
+        mockMvc.perform(get("/api/v1/priority/cases/{id}/score",
                         java.util.UUID.randomUUID()))
                 .andExpect(status().isNotFound());
     }
@@ -113,12 +128,12 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("GET /score: returns 404 for soft-deleted case")
     void computeScoreSoftDeletedCase() throws Exception {
         Case legalCase = seedCase("CIVIL-DEL-001", CaseType.CIVIL,
-                LocalDate.now().minusDays(10), 0, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(10), 0, null, CaseStatus.FILED);
         legalCase.setDeleted(true);
         legalCase.setDeletedAt(java.time.LocalDateTime.now());
         caseRepository.save(legalCase);
 
-        mockMvc.perform(get("/api/priority/cases/{id}/score", legalCase.getId()))
+        mockMvc.perform(get("/api/v1/priority/cases/{id}/score", legalCase.getId()))
                 .andExpect(status().isNotFound());
     }
 
@@ -130,23 +145,23 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("GET /score/latest: returns computed score when none stored")
     void getLatestScoreNoHistory() throws Exception {
         Case legalCase = seedCase("MATRIMONIAL-INT-001", CaseType.MATRIMONIAL,
-                LocalDate.now().minusDays(30), 1, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(30), 1, null, CaseStatus.FILED);
 
-        mockMvc.perform(get("/api/priority/cases/{id}/score/latest", legalCase.getId()))
+        mockMvc.perform(get("/api/v1/priority/cases/{id}/score/latest", legalCase.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalScore").isNumber())
-                .andExpect(jsonPath("$.factors", hasSize(4)));
+                .andExpect(jsonPath("$.factors", hasSize(5)));
     }
 
     @Test
     @DisplayName("GET /score/latest: each call to /score appends a new history row")
     void multipleComputeCallsAppendHistory() throws Exception {
         Case legalCase = seedCase("BAIL-HIST-001", CaseType.BAIL,
-                LocalDate.now().minusDays(60), 0, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(60), 0, null, CaseStatus.FILED);
 
-        mockMvc.perform(get("/api/priority/cases/{id}/score", legalCase.getId()))
+        mockMvc.perform(get("/api/v1/priority/cases/{id}/score", legalCase.getId()))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/api/priority/cases/{id}/score", legalCase.getId()))
+        mockMvc.perform(get("/api/v1/priority/cases/{id}/score", legalCase.getId()))
                 .andExpect(status().isOk());
 
         // Two rows in history
@@ -164,20 +179,20 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     void topNCasesOrdered() throws Exception {
         // Seed 3 cases with different urgency levels
         seedCase("BAIL-TOP-001", CaseType.BAIL,
-                LocalDate.now().minusDays(200), 3, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(200), 3, null, CaseStatus.FILED);
         seedCase("CIVIL-TOP-001", CaseType.CIVIL,
-                LocalDate.now().minusDays(10), 0, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(10), 0, null, CaseStatus.FILED);
         seedCase("POCSO-TOP-001", CaseType.POCSO,
-                LocalDate.now().minusDays(150), 2, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(150), 2, null, CaseStatus.FILED);
 
-        mockMvc.perform(get("/api/priority/cases/top").param("limit", "3"))
+        mockMvc.perform(get("/api/v1/priority/cases/top").param("limit", "3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(3)))
                 // First result should have higher score than second
                 .andExpect(jsonPath("$[0].totalScore").isNumber())
                 .andExpect(jsonPath("$[1].totalScore").isNumber())
                 // All results should have breakdowns
-                .andExpect(jsonPath("$[0].factors", hasSize(4)));
+                .andExpect(jsonPath("$[0].factors", hasSize(5)));
     }
 
     @Test
@@ -186,9 +201,9 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
         seedCase("BAIL-DISPOSED-001", CaseType.BAIL,
                 LocalDate.now().minusDays(300), 5, null, CaseStatus.DISPOSED);
         Case openCase = seedCase("CIVIL-OPEN-001", CaseType.CIVIL,
-                LocalDate.now().minusDays(10), 0, null, CaseStatus.PENDING);
+                LocalDate.now().minusDays(10), 0, null, CaseStatus.FILED);
 
-        mockMvc.perform(get("/api/priority/cases/top").param("limit", "10"))
+        mockMvc.perform(get("/api/v1/priority/cases/top").param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].caseId").value(openCase.getId().toString()));
@@ -197,7 +212,7 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("GET /top: returns empty list when no open cases exist")
     void topNEmptyWhenNoCases() throws Exception {
-        mockMvc.perform(get("/api/priority/cases/top").param("limit", "10"))
+        mockMvc.perform(get("/api/v1/priority/cases/top").param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
     }
@@ -207,10 +222,10 @@ class PriorityScoreControllerIntegrationTest extends AbstractIntegrationTest {
     void topNDefaultLimit() throws Exception {
         for (int i = 0; i < 15; i++) {
             seedCase("CIVIL-DEF-" + String.format("%03d", i), CaseType.CIVIL,
-                    LocalDate.now().minusDays(i + 1), 0, null, CaseStatus.PENDING);
+                    LocalDate.now().minusDays(i + 1), 0, null, CaseStatus.FILED);
         }
 
-        mockMvc.perform(get("/api/priority/cases/top"))
+        mockMvc.perform(get("/api/v1/priority/cases/top"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(10)));
     }

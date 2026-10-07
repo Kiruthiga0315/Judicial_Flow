@@ -66,6 +66,10 @@ public class SchedulingInput {
         private BigDecimal priorityScore;
         private UUID linkedCaseId; // null if not linked
         private int estimatedDurationMinutes; // 0 = use default
+        private LocalDate filingDate;
+        private LocalDate effectiveFilingDate;
+        private com.judicialflow.common.enums.CaseType caseType;
+        private Boolean statutoryPriority;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor

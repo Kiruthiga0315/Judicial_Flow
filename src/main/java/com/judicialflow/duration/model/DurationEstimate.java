@@ -52,6 +52,9 @@ public class DurationEstimate {
     @Column(name = "top_features")
     private String topFeatures;
 
+    @Column(name = "training_sample_count")
+    private Integer trainingSampleCount;
+
     @Column(name = "computed_at", nullable = false)
     private LocalDateTime computedAt;
 

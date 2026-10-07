@@ -22,9 +22,12 @@ import java.util.*;
  * assignments, so that intra-run double-booking is detected.
  */
 public class HardConstraintChecker {
+    private static final Comparator<TimeSlot> TIME_SLOT_COMPARATOR =
+            Comparator.comparing(TimeSlot::start).thenComparing(TimeSlot::end);
+
     // Internal booking ledgers: track all committed + proposed bookings
-    private final Map<UUID, List<TimeSlot>> judgeBookings = new HashMap<>();
-    private final Map<UUID, List<TimeSlot>> courtroomBookings = new HashMap<>();
+    private final Map<UUID, TreeSet<TimeSlot>> judgeBookings = new HashMap<>();
+    private final Map<UUID, TreeSet<TimeSlot>> courtroomBookings = new HashMap<>();
     // Track hearing times for linked-case sequencing
     private final Map<UUID, LocalDateTime> caseHearingTimes = new HashMap<>();
 
@@ -42,8 +45,8 @@ public class HardConstraintChecker {
         // For each existing hearing, add to the appropriate booking ledger
         for (var h : existingHearings) {
             TimeSlot slot = new TimeSlot(h.getStartTime(), h.getStartTime().plusMinutes(h.getDurationMinutes()));
-            judgeBookings.computeIfAbsent(h.getJudgeId(), k -> new ArrayList<>()).add(slot);
-            courtroomBookings.computeIfAbsent(h.getCourtroomId(), k -> new ArrayList<>()).add(slot);
+            judgeBookings.computeIfAbsent(h.getJudgeId(), k -> new TreeSet<>(TIME_SLOT_COMPARATOR)).add(slot);
+            courtroomBookings.computeIfAbsent(h.getCourtroomId(), k -> new TreeSet<>(TIME_SLOT_COMPARATOR)).add(slot);
             caseHearingTimes.put(h.getCaseId(), h.getStartTime());
         }
     }
@@ -78,15 +81,25 @@ public class HardConstraintChecker {
     }
 
     public boolean isJudgeFree(UUID judgeId, LocalDateTime start, int durationMinutes) {
+        TreeSet<TimeSlot> bookings = judgeBookings.get(judgeId);
+        if (bookings == null || bookings.isEmpty()) return true;
         TimeSlot proposed = new TimeSlot(start, start.plusMinutes(durationMinutes));
-        List<TimeSlot> bookings = judgeBookings.getOrDefault(judgeId, Collections.emptyList());
-        return bookings.stream().noneMatch(proposed::overlaps);
+        TimeSlot floor = bookings.floor(proposed);
+        if (floor != null && floor.end.isAfter(proposed.start)) return false;
+        TimeSlot ceil = bookings.ceiling(proposed);
+        if (ceil != null && ceil.start.isBefore(proposed.end)) return false;
+        return true;
     }
 
     public boolean isCourtroomFree(UUID courtroomId, LocalDateTime start, int durationMinutes) {
+        TreeSet<TimeSlot> bookings = courtroomBookings.get(courtroomId);
+        if (bookings == null || bookings.isEmpty()) return true;
         TimeSlot proposed = new TimeSlot(start, start.plusMinutes(durationMinutes));
-        List<TimeSlot> bookings = courtroomBookings.getOrDefault(courtroomId, Collections.emptyList());
-        return bookings.stream().noneMatch(proposed::overlaps);
+        TimeSlot floor = bookings.floor(proposed);
+        if (floor != null && floor.end.isAfter(proposed.start)) return false;
+        TimeSlot ceil = bookings.ceiling(proposed);
+        if (ceil != null && ceil.start.isBefore(proposed.end)) return false;
+        return true;
     }
 
     public boolean isWithinJudgeAvailability(UUID judgeId, LocalDateTime start, int durationMinutes, List<SchedulingInput.JudgeInfo> judges) {
@@ -163,16 +176,16 @@ public class HardConstraintChecker {
      */
     public void recordBooking(UUID judgeId, UUID courtroomId, UUID caseId, LocalDateTime start, int durationMinutes) {
         TimeSlot slot = new TimeSlot(start, start.plusMinutes(durationMinutes));
-        judgeBookings.computeIfAbsent(judgeId, k -> new ArrayList<>()).add(slot);
-        courtroomBookings.computeIfAbsent(courtroomId, k -> new ArrayList<>()).add(slot);
+        judgeBookings.computeIfAbsent(judgeId, k -> new TreeSet<>(TIME_SLOT_COMPARATOR)).add(slot);
+        courtroomBookings.computeIfAbsent(courtroomId, k -> new TreeSet<>(TIME_SLOT_COMPARATOR)).add(slot);
         caseHearingTimes.put(caseId, start);
     }
 
     public void removeBooking(UUID judgeId, UUID courtroomId, UUID caseId, LocalDateTime start, int durationMinutes) {
         TimeSlot slot = new TimeSlot(start, start.plusMinutes(durationMinutes));
-        List<TimeSlot> jb = judgeBookings.get(judgeId);
+        TreeSet<TimeSlot> jb = judgeBookings.get(judgeId);
         if (jb != null) jb.remove(slot);
-        List<TimeSlot> cb = courtroomBookings.get(courtroomId);
+        TreeSet<TimeSlot> cb = courtroomBookings.get(courtroomId);
         if (cb != null) cb.remove(slot);
         caseHearingTimes.remove(caseId);
     }

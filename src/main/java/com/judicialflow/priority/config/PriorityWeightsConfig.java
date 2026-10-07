@@ -92,6 +92,16 @@ public class PriorityWeightsConfig {
     private BigDecimal linkedCaseBonus = new BigDecimal("10.00");
 
     // -----------------------------------------------------------------------
+    // Statutory deadline proximity bonus
+    // -----------------------------------------------------------------------
+
+    /**
+     * Maximum bonus for statutory deadline urgency (escalating as deadline approaches or passes).
+     * Default: 30.00 points.
+     */
+    private BigDecimal maxDeadlineBonus = new BigDecimal("30.00");
+
+    // -----------------------------------------------------------------------
     // Constructor – set default case-type urgency values
     // -----------------------------------------------------------------------
 
@@ -158,5 +168,13 @@ public class PriorityWeightsConfig {
 
     public void setLinkedCaseBonus(BigDecimal linkedCaseBonus) {
         this.linkedCaseBonus = linkedCaseBonus;
+    }
+
+    public BigDecimal getMaxDeadlineBonus() {
+        return maxDeadlineBonus;
+    }
+
+    public void setMaxDeadlineBonus(BigDecimal maxDeadlineBonus) {
+        this.maxDeadlineBonus = maxDeadlineBonus;
     }
 }

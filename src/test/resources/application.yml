@@ -9,5 +9,27 @@ spring:
     enabled: true
     baseline-on-migrate: true
   batch:
+    job:
+      enabled: false
     jdbc:
       initialize-schema: always
+  mail:
+    host: localhost
+    port: 1025
+scheduling:
+  nightly-job:
+    enabled: false # disable automatic cron in test environment
+management:
+  health:
+    mail:
+      enabled: false
+
+court:
+  zone-id: Asia/Kolkata
+
+logging:
+  level:
+    root: INFO
+    com.judicialflow.priority.service.PriorityScoreCalculator: WARN
+    com.judicialflow.simulation.validation.SimulationRunnerService: INFO
+

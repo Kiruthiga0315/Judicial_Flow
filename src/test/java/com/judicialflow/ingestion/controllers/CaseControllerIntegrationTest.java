@@ -18,11 +18,14 @@ import org.springframework.http.MediaType;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@WithMockUser(roles = "REGISTRAR")
 class CaseControllerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -31,8 +34,20 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private JudgeRepository judgeRepository;
 
+    @Autowired
+    private com.judicialflow.scheduling.repository.SchedulingProposalRepository proposalRepository;
+
+    @Autowired
+    private com.judicialflow.scheduling.repository.SchedulingRunRepository runRepository;
+
+    @Autowired
+    private com.judicialflow.common.HearingRepository hearingRepository;
+
     @BeforeEach
     void setUp() {
+        hearingRepository.deleteAll();
+        proposalRepository.deleteAll();
+        runRepository.deleteAll();
         caseRepository.deleteAll();
         judgeRepository.deleteAll();
     }
@@ -49,13 +64,13 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .caseNumber("CIV-2024-001")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.of(2024, 1, 15))
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .priorAdjournments(0)
                 .assignedJudgeId(judge.getId())
                 .build();
 
         // 1. Create Parent Case
-        String parentJson = mockMvc.perform(post("/api/cases")
+        String parentJson = mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(parentReq)))
                 .andExpect(status().isCreated())
@@ -73,12 +88,12 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .caseNumber("CIV-2024-002")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.of(2024, 2, 20))
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .linkedCaseId(parentId)
                 .assignedJudgeId(judge.getId())
                 .build();
 
-        String childJson = mockMvc.perform(post("/api/cases")
+        String childJson = mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(childReq)))
                 .andExpect(status().isCreated())
@@ -89,7 +104,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
         UUID childId = UUID.fromString(objectMapper.readTree(childJson).get("id").asText());
 
         // 3. Get Case by ID
-        mockMvc.perform(get("/api/cases/{id}", childId))
+        mockMvc.perform(get("/api/v1/cases/{id}", childId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(childId.toString()))
                 .andExpect(jsonPath("$.caseNumber").value("CIV-2024-002"));
@@ -105,7 +120,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .assignedJudgeId(judge.getId())
                 .build();
 
-        mockMvc.perform(put("/api/cases/{id}", childId)
+        mockMvc.perform(put("/api/v1/cases/{id}", childId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateReq)))
                 .andExpect(status().isOk())
@@ -114,7 +129,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.priorAdjournments").value(2));
 
         // 5. List with Filters and Pagination
-        mockMvc.perform(get("/api/cases")
+        mockMvc.perform(get("/api/v1/cases")
                         .param("status", "SCHEDULED")
                         .param("caseType", "CIVIL")
                         .param("judgeId", judge.getId().toString())
@@ -128,7 +143,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.content[0].caseNumber").value("CIV-2024-002-AMENDED"));
 
         // 6. Soft-delete Child Case
-        mockMvc.perform(delete("/api/cases/{id}", childId))
+        mockMvc.perform(delete("/api/v1/cases/{id}", childId))
                 .andExpect(status().isNoContent());
 
         // Verify soft-deleted in database
@@ -136,16 +151,16 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
         assertTrue(softDeletedInDb.isDeleted());
 
         // Verify standard GET returns 404
-        mockMvc.perform(get("/api/cases/{id}", childId))
+        mockMvc.perform(get("/api/v1/cases/{id}", childId))
                 .andExpect(status().isNotFound());
 
         // Verify GET with includeDeleted=true returns 200
-        mockMvc.perform(get("/api/cases/{id}", childId).param("includeDeleted", "true"))
+        mockMvc.perform(get("/api/v1/cases/{id}", childId).param("includeDeleted", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.deleted").value(true));
 
         // Verify omitted from list by default
-        mockMvc.perform(get("/api/cases"))
+        mockMvc.perform(get("/api/v1/cases"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].id").value(parentId.toString()));
@@ -158,11 +173,11 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 {
                     "caseNumber": "CRIM-2024-100",
                     "caseType": "BAIL",
-                    "currentStatus": "PENDING"
+                    "currentStatus": "FILED"
                 }
                 """;
 
-        mockMvc.perform(post("/api/cases")
+        mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
                 .andExpect(status().isBadRequest())
@@ -179,7 +194,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .filingDate(LocalDate.now())
                 .build();
 
-        mockMvc.perform(post("/api/cases")
+        mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())
@@ -198,7 +213,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(post("/api/cases")
+        mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
                 .andExpect(status().isBadRequest())
@@ -215,7 +230,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .filingDate(LocalDate.now().plusDays(10))
                 .build();
 
-        mockMvc.perform(post("/api/cases")
+        mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())
@@ -230,7 +245,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .caseNumber("DUP-2024-001")
                 .caseType(CaseType.BAIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .build());
 
         CreateCaseRequest req = CreateCaseRequest.builder()
@@ -239,7 +254,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .filingDate(LocalDate.now())
                 .build();
 
-        mockMvc.perform(post("/api/cases")
+        mockMvc.perform(post("/api/v1/cases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isConflict())
@@ -255,7 +270,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .caseNumber("CASE-A")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .build());
 
         // Case B links to Case A
@@ -263,7 +278,7 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .caseNumber("CASE-B")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .linkedCase(caseA)
                 .build());
 
@@ -272,11 +287,11 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .caseNumber("CASE-A")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .linkedCaseId(caseA.getId()) // self-link
                 .build();
 
-        mockMvc.perform(put("/api/cases/{id}", caseA.getId())
+        mockMvc.perform(put("/api/v1/cases/{id}", caseA.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(selfLinkReq)))
                 .andExpect(status().isBadRequest())
@@ -287,11 +302,11 @@ class CaseControllerIntegrationTest extends AbstractIntegrationTest {
                 .caseNumber("CASE-A")
                 .caseType(CaseType.CIVIL)
                 .filingDate(LocalDate.now())
-                .currentStatus(CaseStatus.PENDING)
+                .currentStatus(CaseStatus.FILED)
                 .linkedCaseId(caseB.getId()) // cycle!
                 .build();
 
-        mockMvc.perform(put("/api/cases/{id}", caseA.getId())
+        mockMvc.perform(put("/api/v1/cases/{id}", caseA.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(cycleReq)))
                 .andExpect(status().isBadRequest())

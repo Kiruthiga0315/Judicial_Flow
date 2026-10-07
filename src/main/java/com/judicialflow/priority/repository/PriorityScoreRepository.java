@@ -54,4 +54,17 @@ public interface PriorityScoreRepository extends JpaRepository<PriorityScore, UU
             LIMIT :limit
             """)
     List<PriorityScore> findTopNLatestScores(@Param("limit") int limit);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+            DELETE FROM PriorityScore ps
+            WHERE ps.computedAt < :cutoff
+              AND ps.id NOT IN (
+                  SELECT ps2.id FROM PriorityScore ps2
+                  WHERE ps2.computedAt = (
+                      SELECT MAX(ps3.computedAt) FROM PriorityScore ps3 WHERE ps3.legalCase.id = ps2.legalCase.id
+                  )
+              )
+            """)
+    int pruneScoresOlderThanExceptLatest(@Param("cutoff") java.time.LocalDateTime cutoff);
 }
