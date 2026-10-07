@@ -98,6 +98,9 @@ export const App: React.FC = () => {
             setSelectedCaseId(null);
             setReassignHearing(h);
           }}
+          onHearingUpdated={() => {
+            setRefreshTrigger((v) => v + 1);
+          }}
         />
       )}
 

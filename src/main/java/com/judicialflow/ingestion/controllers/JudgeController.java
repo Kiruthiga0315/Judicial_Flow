@@ -78,4 +78,30 @@ public class JudgeController {
         JudgeResponse response = judgeService.setAvailabilityWindows(id, request);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{id}/leave")
+    @Operation(summary = "Record judge leave / absence", description = "Registers date-specific absence for a judge. Automatically invalidates/adjourns conflicting scheduled hearings and places cases back into the schedulable pool.")
+    @ApiResponse(responseCode = "200", description = "Leave recorded and conflicting hearings adjourned", content = @Content(schema = @Schema(implementation = JudgeLeaveResponse.class)))
+    public ResponseEntity<JudgeLeaveResponse> recordJudgeLeave(
+            @Parameter(description = "Judge UUID") @PathVariable UUID id,
+            @Valid @RequestBody JudgeLeaveRequest request) {
+        JudgeLeaveResponse response = judgeService.recordJudgeLeave(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/leaves")
+    @Operation(summary = "Get judge leaves", description = "Lists all recorded absence/leave periods for a judge.")
+    public ResponseEntity<java.util.List<JudgeLeaveResponse>> getJudgeLeaves(
+            @Parameter(description = "Judge UUID") @PathVariable UUID id) {
+        return ResponseEntity.ok(judgeService.getJudgeLeaves(id));
+    }
+
+    @DeleteMapping("/{id}/leaves/{leaveId}")
+    @Operation(summary = "Cancel judge leave", description = "Removes a recorded leave entry for a judge.")
+    public ResponseEntity<Void> deleteJudgeLeave(
+            @Parameter(description = "Judge UUID") @PathVariable UUID id,
+            @Parameter(description = "Leave UUID") @PathVariable UUID leaveId) {
+        judgeService.deleteJudgeLeave(id, leaveId);
+        return ResponseEntity.noContent().build();
+    }
 }

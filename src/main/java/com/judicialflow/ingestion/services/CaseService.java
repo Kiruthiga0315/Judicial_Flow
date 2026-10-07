@@ -207,9 +207,22 @@ public class CaseService {
                             .assignedCourtroomName(c.getAssignedCourtroom() != null ? c.getAssignedCourtroom().getName() : null)
                             .build();
                 })
-                .sorted((a, b) -> Double.compare(
-                        b.getPriorityScore() != null ? b.getPriorityScore() : 0.0,
-                        a.getPriorityScore() != null ? a.getPriorityScore() : 0.0))
+                .sorted((a, b) -> {
+                    double scoreA = a.getPriorityScore() != null ? a.getPriorityScore() : 0.0;
+                    double scoreB = b.getPriorityScore() != null ? b.getPriorityScore() : 0.0;
+                    int scoreCmp = Double.compare(scoreB, scoreA);
+                    if (scoreCmp != 0) return scoreCmp;
+
+                    int daysCmp = Long.compare(b.getDaysPending(), a.getDaysPending());
+                    if (daysCmp != 0) return daysCmp;
+
+                    int adjCmp = Integer.compare(b.getAdjournments(), a.getAdjournments());
+                    if (adjCmp != 0) return adjCmp;
+
+                    String numA = a.getCaseNumber() != null ? a.getCaseNumber() : "";
+                    String numB = b.getCaseNumber() != null ? b.getCaseNumber() : "";
+                    return numA.compareTo(numB);
+                })
                 .limit(maxResults)
                 .toList();
 
@@ -274,6 +287,16 @@ public class CaseService {
 
             if (criteria.getEndDate() != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("filingDate"), criteria.getEndDate()));
+            }
+
+            if (criteria.getSearch() != null && !criteria.getSearch().isBlank()) {
+                String pattern = "%" + criteria.getSearch().trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("caseNumber")), pattern));
+            }
+
+            if (criteria.getCaseNumber() != null && !criteria.getCaseNumber().isBlank()) {
+                String pattern = "%" + criteria.getCaseNumber().trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("caseNumber")), pattern));
             }
 
             if (criteria.getJudgeId() != null) {

@@ -1,24 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Case, PriorityScoreResult, Hearing } from '../types/api';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { ManualScheduleModal } from './ManualScheduleModal';
 import {
   X,
   Calendar,
   Scale,
   History,
+  PlusCircle,
 } from 'lucide-react';
 
 interface CaseDetailDrawerProps {
   caseId: string;
   onClose: () => void;
   onReassignHearing?: (hearing: Hearing) => void;
+  onHearingUpdated?: () => void;
 }
 
 export const CaseDetailDrawer: React.FC<CaseDetailDrawerProps> = ({
   caseId,
   onClose,
   onReassignHearing,
+  onHearingUpdated,
 }) => {
   const { role } = useAuth();
   const [caseData, setCaseData] = useState<Case | null>(null);
@@ -27,30 +31,32 @@ export const CaseDetailDrawer: React.FC<CaseDetailDrawerProps> = ({
   const [hearing, setHearing] = useState<Hearing | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
+
+  const loadDetails = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [c, s, hList, currentHearing] = await Promise.all([
+        api.getCase(caseId),
+        api.getCaseScore(caseId).catch(() => null),
+        api.getCaseScoreHistory(caseId).catch(() => []),
+        api.getHearingForCase(caseId).catch(() => null),
+      ]);
+      setCaseData(c);
+      setScoreResult(s);
+      setHistory(hList || []);
+      setHearing(currentHearing);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load case details');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [caseId]);
 
   useEffect(() => {
-    const loadDetails = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const [c, s, hList, currentHearing] = await Promise.all([
-          api.getCase(caseId),
-          api.getCaseScore(caseId).catch(() => null),
-          api.getCaseScoreHistory(caseId).catch(() => []),
-          api.getHearingForCase(caseId).catch(() => null),
-        ]);
-        setCaseData(c);
-        setScoreResult(s);
-        setHistory(hList || []);
-        setHearing(currentHearing);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load case details');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadDetails();
-  }, [caseId]);
+  }, [loadDetails]);
 
   const scoreBadgeColor = (score: number) => {
     if (score >= 70) return 'bg-red-100 text-red-800 border-red-300';
@@ -135,7 +141,7 @@ export const CaseDetailDrawer: React.FC<CaseDetailDrawerProps> = ({
                         scoreResult.totalScore
                       )}`}
                     >
-                      {scoreResult.totalScore.toFixed(1)} / 100
+                      {scoreResult.totalScore.toFixed(1)} pts
                     </div>
                   )}
                 </div>
@@ -153,29 +159,33 @@ export const CaseDetailDrawer: React.FC<CaseDetailDrawerProps> = ({
                   </h4>
                   {scoreResult?.factors?.length ? (
                     <div className="space-y-2">
-                      {scoreResult.factors.map((f, idx) => (
-                        <div
-                          key={idx}
-                          className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-colors"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-semibold text-slate-800">{f.factorName}</span>
-                            <span className="font-mono font-bold text-blue-900">
-                              +{f.contribution.toFixed(2)} pts
-                            </span>
+                      {scoreResult.factors.map((f, idx) => {
+                        const rawDisplay = f.rawValue != null ? Number(f.rawValue).toString() : f.rawMetricValue || '1';
+                        const weightDisplay = f.weight != null ? (f.weight < 1 ? `${f.weight} pts/unit` : `${f.weight} pts`) : '';
+
+                        return (
+                          <div
+                            key={idx}
+                            className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-semibold text-slate-800">{f.factorName}</span>
+                              <span className="font-mono font-bold text-blue-900">
+                                +{Number(f.contribution).toFixed(2)} pts
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 mt-1">
+                              <span>Raw Value: <strong className="text-slate-700">{rawDisplay}</strong></span>
+                              {weightDisplay && <span>Factor Rate: <strong className="text-slate-700">{weightDisplay}</strong></span>}
+                            </div>
+                            {f.explanation && (
+                              <p className="text-[11px] text-slate-600 mt-1.5 leading-relaxed bg-white/80 p-1.5 rounded border border-slate-100">
+                                {f.explanation}
+                              </p>
+                            )}
                           </div>
-                          <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1">
-                            <span>Raw: <strong>{f.rawMetricValue}</strong></span>
-                            <span>Normalized: {(f.normalizedScore * 100).toFixed(0)}%</span>
-                            <span>Weight: {(f.weight * 100).toFixed(0)}%</span>
-                          </div>
-                          {f.explanation && (
-                            <p className="text-[11px] text-slate-600 mt-1.5 leading-relaxed bg-white/80 p-1.5 rounded border border-slate-100">
-                              {f.explanation}
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs text-slate-400 italic">No score factor breakdown available.</p>
@@ -229,8 +239,17 @@ export const CaseDetailDrawer: React.FC<CaseDetailDrawerProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-3 p-4 bg-slate-50 rounded-lg text-center text-xs text-slate-500 border border-slate-200">
-                    No active hearing currently committed. Case awaiting proposal acceptance.
+                  <div className="mt-3 p-4 bg-slate-50 rounded-lg text-center text-xs text-slate-600 border border-slate-200 space-y-3">
+                    <p className="text-slate-500">No active hearing currently committed. Case awaiting proposal acceptance or direct allocation.</p>
+                    {role !== 'JUDGE' && (
+                      <button
+                        onClick={() => setIsScheduleModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-900 text-white rounded-md text-xs font-medium hover:bg-blue-800 shadow-xs transition-colors"
+                      >
+                        <PlusCircle className="w-4 h-4 text-amber-300" />
+                        Directly Allocate Courtroom & Schedule
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -270,6 +289,24 @@ export const CaseDetailDrawer: React.FC<CaseDetailDrawerProps> = ({
             </>
           )}
         </div>
+
+        {/* Direct Schedule Modal */}
+        {isScheduleModalOpen && caseData && (
+          <ManualScheduleModal
+            caseId={caseData.id}
+            caseNumber={caseData.caseNumber}
+            caseType={caseData.caseType}
+            initialJudgeId={caseData.assignedJudge?.id}
+            initialCourtroomId={caseData.assignedCourtroom?.id}
+            onClose={() => setIsScheduleModalOpen(false)}
+            onSuccess={() => {
+              loadDetails();
+              if (onHearingUpdated) {
+                onHearingUpdated();
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );

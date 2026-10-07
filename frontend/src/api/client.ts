@@ -86,7 +86,7 @@ class ApiClient {
   }
 
   // --- Cases ---
-  async listCases(page = 0, size = 15, sortBy = 'filingDate', direction = 'DESC', type?: string, status?: string): Promise<PageResponse<Case>> {
+  async listCases(page = 0, size = 15, sortBy = 'filingDate', direction = 'DESC', type?: string, status?: string, search?: string): Promise<PageResponse<Case>> {
     const params = new URLSearchParams({
       page: page.toString(),
       size: size.toString(),
@@ -94,6 +94,7 @@ class ApiClient {
     });
     if (type) params.append('caseType', type);
     if (status) params.append('status', status);
+    if (search && search.trim()) params.append('search', search.trim());
     return this.request<PageResponse<Case>>(`/api/v1/cases?${params.toString()}`);
   }
 
@@ -128,7 +129,11 @@ class ApiClient {
 
   async getHearingForCase(caseId: string): Promise<Hearing | null> {
     try {
-      return await this.request<Hearing>(`/api/v1/hearings/cases/${caseId}`);
+      const res = await this.request<Hearing | null>(`/api/v1/hearings/cases/${caseId}`);
+      if (!res || !res.id || Object.keys(res).length === 0) {
+        return null;
+      }
+      return res;
     } catch (e: any) {
       if (e.status === 404) return null;
       throw e;
@@ -149,7 +154,7 @@ class ApiClient {
     });
   }
 
-  // --- Master Data ---
+  // --- Master Data & Judge Management ---
   async listJudges(): Promise<PageResponse<Judge>> {
     return this.request<PageResponse<Judge>>('/api/v1/judges?size=100');
   }
@@ -158,7 +163,31 @@ class ApiClient {
     return this.request<PageResponse<Courtroom>>('/api/v1/courtrooms?size=100');
   }
 
+  async recordJudgeLeave(judgeId: string, data: { startDate: string; endDate: string; reason?: string }): Promise<any> {
+    return this.request(`/api/v1/judges/${judgeId}/leave`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getJudgeLeaves(judgeId: string): Promise<any[]> {
+    return this.request(`/api/v1/judges/${judgeId}/leaves`);
+  }
+
+  async deleteJudgeLeave(judgeId: string, leaveId: string): Promise<void> {
+    return this.request(`/api/v1/judges/${judgeId}/leaves/${leaveId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // --- Scheduling Proposals ---
+  async triggerSchedulingRun(config?: { horizonDays?: number; defaultDurationMinutes?: number }): Promise<SchedulingRun> {
+    return this.request<SchedulingRun>('/api/v1/scheduling/run', {
+      method: 'POST',
+      body: JSON.stringify(config || {}),
+    });
+  }
+
   async getLatestSchedulingRun(): Promise<SchedulingRun> {
     return this.request<SchedulingRun>('/api/v1/scheduling/runs/latest');
   }
@@ -177,6 +206,21 @@ class ApiClient {
     return this.request<Proposal>(`/api/v1/scheduling/proposals/${proposalId}/reject`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    });
+  }
+
+  async applyManualOverride(data: {
+    caseId: string;
+    judgeId: string;
+    courtroomId: string;
+    scheduledTime: string;
+    durationMinutes?: number;
+    reason: string;
+    overriddenBy: string;
+  }): Promise<Proposal> {
+    return this.request<Proposal>('/api/v1/scheduling/override', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 

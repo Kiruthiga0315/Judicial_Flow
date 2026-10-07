@@ -186,4 +186,32 @@ class HardConstraintCheckerTest {
         assertTrue(violations.size() >= 2,
                 "Expected multiple violations but got: " + violations);
     }
+
+    @Test
+    void judgeOnLeave_violatesHardConstraint() {
+        // Configure Judge A to have leave on Monday 2026-09-14
+        List<SchedulingInput.JudgeInfo> judgesWithLeave = List.of(
+                SchedulingInput.JudgeInfo.builder()
+                        .judgeId(judgeA).judgeName("Judge A")
+                        .availabilityWindows(List.of(
+                                SchedulingInput.AvailabilityWindow.builder()
+                                        .dayOfWeek(DayOfWeek.MONDAY).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(17, 0)).build()))
+                        .leaves(List.of(
+                                SchedulingInput.DateRange.builder()
+                                        .startDate(monday)
+                                        .endDate(monday)
+                                        .build()))
+                        .build()
+        );
+
+        // Within weekly Monday window, but Monday is an approved leave date
+        assertFalse(checker.isWithinJudgeAvailability(judgeA,
+                LocalDateTime.of(monday, LocalTime.of(10, 0)), 60, judgesWithLeave));
+
+        // Another date without leave should pass availability check (e.g. next Monday)
+        LocalDate nextMonday = monday.plusDays(7);
+        assertTrue(checker.isWithinJudgeAvailability(judgeA,
+                LocalDateTime.of(nextMonday, LocalTime.of(10, 0)), 60, judgesWithLeave));
+    }
 }
+

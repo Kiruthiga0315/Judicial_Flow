@@ -36,6 +36,12 @@ public class CaseFilterCriteria {
     @Schema(description = "Filter by filing date on or before this date (inclusive)", example = "2024-12-31")
     private LocalDate endDate;
 
+    @Schema(description = "Search term to match case number (case-insensitive partial match)", example = "SYN-2026-")
+    private String search;
+
+    @Schema(description = "Filter by exact or partial case number", example = "CIV-2024-001")
+    private String caseNumber;
+
     @Schema(description = "Include soft-deleted cases in results (default false)", example = "false")
     @Builder.Default
     private boolean includeDeleted = false;

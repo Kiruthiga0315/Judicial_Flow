@@ -187,7 +187,7 @@ class RoleRouteMatrixIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/judges")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/courtrooms")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/hearings")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/v1/hearings/cases/" + RANDOM_ID)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/hearings/cases/" + RANDOM_ID)).andExpect(status().isNoContent());
         mockMvc.perform(get("/api/v1/priority/cases/top")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/priority/cases/" + RANDOM_ID + "/history")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/v1/estimates/cases/" + RANDOM_ID)).andExpect(status().isNotFound());
@@ -242,7 +242,7 @@ class RoleRouteMatrixIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/judges")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/courtrooms")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/hearings")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/v1/hearings/cases/" + RANDOM_ID)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/hearings/cases/" + RANDOM_ID)).andExpect(status().isNoContent());
         mockMvc.perform(get("/api/v1/priority/cases/top")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/priority/cases/" + RANDOM_ID + "/history")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/v1/scheduling/runs/" + RANDOM_ID)).andExpect(status().isNotFound());
@@ -283,7 +283,7 @@ class RoleRouteMatrixIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/judges")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/courtrooms")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/hearings")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/v1/hearings/cases/" + RANDOM_ID)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/hearings/cases/" + RANDOM_ID)).andExpect(status().isNoContent());
         mockMvc.perform(get("/api/v1/priority/cases/top")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/priority/cases/" + RANDOM_ID + "/history")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/v1/scheduling/runs/" + RANDOM_ID)).andExpect(status().isNotFound());

@@ -68,7 +68,17 @@ public class SchedulingEngine {
         List<LocalDateTime> timeSlots = generateTimeSlots(input.getHorizonStart(), input.getHorizonDays(), input.getDefaultDurationMinutes());
 
         List<SchedulingInput.CaseInfo> sortedCases = input.getCases().stream()
-                .sorted((a, b) -> b.getPriorityScore().compareTo(a.getPriorityScore()))
+                .sorted((a, b) -> {
+                    int scoreCmp = b.getPriorityScore().compareTo(a.getPriorityScore());
+                    if (scoreCmp != 0) return scoreCmp;
+                    if (a.getFilingDate() != null && b.getFilingDate() != null) {
+                        int dateCmp = a.getFilingDate().compareTo(b.getFilingDate()); // older filing date first
+                        if (dateCmp != 0) return dateCmp;
+                    }
+                    String numA = a.getCaseNumber() != null ? a.getCaseNumber() : "";
+                    String numB = b.getCaseNumber() != null ? b.getCaseNumber() : "";
+                    return numA.compareTo(numB);
+                })
                 .collect(Collectors.toList());
 
         BigDecimal maxPriority = sortedCases.isEmpty() ? BigDecimal.ZERO : sortedCases.get(0).getPriorityScore();

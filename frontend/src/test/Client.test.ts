@@ -32,4 +32,77 @@ describe('ApiClient In-Memory Authentication', () => {
     expect(unauthorizedCallback).toHaveBeenCalledTimes(1);
     expect(api.hasCredentials()).toBe(false);
   });
+
+  describe('getHearingForCase handling', () => {
+    it('returns null on 204 No Content', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        status: 204,
+        ok: true,
+      } as any);
+
+      const result = await api.getHearingForCase('case-123');
+      expect(result).toBeNull();
+    });
+
+    it('returns hearing object on 200 OK', async () => {
+      const mockHearing = { id: 'h-1', caseId: 'case-123', scheduledTime: '2026-10-10T10:00:00' };
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        json: async () => mockHearing,
+      } as any);
+
+      const result = await api.getHearingForCase('case-123');
+      expect(result).toEqual(mockHearing);
+    });
+
+    it('returns null on 404 Not Found fallback', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        status: 404,
+        ok: false,
+        json: async () => ({ message: 'Not found' }),
+      } as any);
+
+      const result = await api.getHearingForCase('case-123');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('recordJudgeLeave', () => {
+    it('sends POST request with leave payload', async () => {
+      const mockResponse = {
+        id: 'leave-1',
+        judgeId: 'judge-1',
+        startDate: '2026-10-15',
+        endDate: '2026-10-17',
+        affectedHearingsCount: 2,
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        json: async () => mockResponse,
+      } as any);
+
+      const result = await api.recordJudgeLeave('judge-1', {
+        startDate: '2026-10-15',
+        endDate: '2026-10-17',
+        reason: 'Judicial training',
+      });
+
+      expect(result).toEqual(mockResponse);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/v1/judges/judge-1/leave',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            startDate: '2026-10-15',
+            endDate: '2026-10-17',
+            reason: 'Judicial training',
+          }),
+        })
+      );
+    });
+  });
 });
+

@@ -34,11 +34,11 @@ public class HearingController {
     }
 
     @GetMapping("/cases/{caseId}")
-    @Operation(summary = "Get current/latest hearing for a case", description = "Returns latest hearing for a case. Scoping handled fail-closed in HearingService.")
+    @Operation(summary = "Get current/latest hearing for a case", description = "Returns latest hearing for a case, or 204 if none scheduled. Scoping handled fail-closed in HearingService.")
     public ResponseEntity<HearingResponse> getHearingForCase(@PathVariable UUID caseId) {
         HearingResponse response = hearingService.getCurrentHearingForCase(caseId);
         if (response == null) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(response);
     }

@@ -9,7 +9,10 @@ import {
   ArrowRightLeft,
   RefreshCw,
   Building2,
+  CalendarOff,
+  CheckCircle2,
 } from 'lucide-react';
+import { JudgeLeaveModal } from '../components/JudgeLeaveModal';
 
 interface SchedulePageProps {
   onSelectCase: (caseId: string) => void;
@@ -21,6 +24,8 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onSelectCase, onOpen
   const [hearings, setHearings] = useState<Hearing[]>([]);
   const [judges, setJudges] = useState<Judge[]>([]);
   const [courtrooms, setCourtrooms] = useState<Courtroom[]>([]);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState<boolean>(false);
+  const [leaveSuccessNotice, setLeaveSuccessNotice] = useState<string | null>(null);
 
   // Date range defaults: Today to Today + 14 days
   const [fromDate, setFromDate] = useState<string>(() => {
@@ -91,15 +96,39 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onSelectCase, onOpen
           </p>
         </div>
 
-        <button
-          onClick={fetchHearings}
-          disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-2xs self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setIsLeaveModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-300 rounded-lg text-xs font-semibold text-amber-900 hover:bg-amber-100 shadow-2xs transition-colors"
+          >
+            <CalendarOff className="w-3.5 h-3.5 text-amber-700" />
+            Register Judge Leave
+          </button>
+          <button
+            onClick={fetchHearings}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-2xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {leaveSuccessNotice && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-start justify-between gap-2 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{leaveSuccessNotice}</span>
+          </div>
+          <button
+            onClick={() => setLeaveSuccessNotice(null)}
+            className="text-emerald-700 hover:text-emerald-900 font-bold px-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Date & Filter Controls */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
@@ -294,6 +323,22 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onSelectCase, onOpen
           </div>
         )}
       </div>
+
+      {isLeaveModalOpen && (
+        <JudgeLeaveModal
+          judges={judges}
+          initialJudgeId={role === 'JUDGE' && userJudgeId ? userJudgeId : selectedJudge || undefined}
+          onClose={() => setIsLeaveModalOpen(false)}
+          onSuccess={(res) => {
+            setIsLeaveModalOpen(false);
+            setLeaveSuccessNotice(
+              res.message ||
+                `Leave registered for ${res.judgeName}. ${res.affectedHearingsCount} hearing(s) adjourned for rescheduling.`
+            );
+            fetchHearings();
+          }}
+        />
+      )}
     </div>
   );
 };

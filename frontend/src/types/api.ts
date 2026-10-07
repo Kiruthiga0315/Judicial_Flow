@@ -28,8 +28,9 @@ export interface Case {
 
 export interface ScoreFactorBreakdown {
   factorName: string;
-  rawMetricValue: string;
-  normalizedScore: number;
+  rawValue?: number | string | null;
+  rawMetricValue?: string | null;
+  normalizedScore?: number | null;
   weight: number;
   contribution: number;
   explanation: string;
@@ -70,20 +71,58 @@ export interface Courtroom {
   building?: string | null;
 }
 
+export interface JudgeLeave {
+  id: string;
+  judgeId: string;
+  judgeName: string;
+  startDate: string;
+  endDate: string;
+  reason?: string | null;
+  affectedHearingsCount?: number;
+  affectedCaseNumbers?: string[];
+  message?: string;
+  createdAt?: string;
+}
+
+export interface JudgeLeaveRequest {
+  startDate: string;
+  endDate: string;
+  reason?: string;
+}
+
+export interface ProposalDecisionLog {
+  caseNumber: string;
+  chosenJudgeName?: string;
+  chosenCourtroomName?: string;
+  chosenTime?: string;
+  chosenSoftScore?: number;
+  runnerUpJudgeName?: string;
+  runnerUpCourtroomName?: string;
+  runnerUpTime?: string;
+  runnerUpSoftScore?: number;
+  runnerUpRejectionReason?: string;
+  constraintsSatisfied?: string[];
+  explanation?: string;
+}
+
 export interface Proposal {
   proposalId: string;
+  id?: string;
   caseId: string;
   caseNumber: string;
   judgeId: string;
   judgeName: string;
   courtroomId: string;
   courtroomName: string;
-  slotStartTime: string;
+  proposedTime?: string;
+  slotStartTime?: string;
   durationMinutes: number;
-  scoreAtScheduling: number;
-  status: 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED';
+  casePriorityScore?: number;
+  scoreAtScheduling?: number;
+  status: 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED' | 'OVERRIDDEN';
   rejectionReason?: string | null;
   explanation?: string | null;
+  decisionLog?: ProposalDecisionLog | null;
   softCostPenalty?: number | null;
 }
 

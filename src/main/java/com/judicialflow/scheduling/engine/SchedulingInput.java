@@ -77,6 +77,14 @@ public class SchedulingInput {
         private UUID judgeId;
         private String judgeName;
         private List<AvailabilityWindow> availabilityWindows;
+        @Builder.Default
+        private List<DateRange> leaves = new ArrayList<>();
+    }
+
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class DateRange {
+        private LocalDate startDate;
+        private LocalDate endDate;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor

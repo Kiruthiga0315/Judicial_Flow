@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Case, CaseStatus } from '../types/api';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { ManualScheduleModal } from '../components/ManualScheduleModal';
 import {
   Search,
   Filter,
@@ -9,6 +11,7 @@ import {
   ChevronRight,
   Eye,
   Calendar,
+  CalendarPlus,
   AlertCircle,
   RotateCcw,
 } from 'lucide-react';
@@ -18,6 +21,7 @@ interface CaseListPageProps {
 }
 
 export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
+  const { role } = useAuth();
   const [cases, setCases] = useState<Case[]>([]);
   const [page, setPage] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(0);
@@ -32,6 +36,7 @@ export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [scheduleModalCase, setScheduleModalCase] = useState<Case | null>(null);
 
   const fetchCases = async () => {
     setIsLoading(true);
@@ -43,7 +48,8 @@ export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
         sortBy,
         direction,
         selectedType || undefined,
-        selectedStatus || undefined
+        selectedStatus || undefined,
+        searchTerm || undefined
       );
       setCases(res.content || []);
       setTotalPages(res.totalPages || 0);
@@ -57,7 +63,7 @@ export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
 
   useEffect(() => {
     fetchCases();
-  }, [page, sortBy, direction, selectedType, selectedStatus]);
+  }, [page, sortBy, direction, selectedType, selectedStatus, searchTerm]);
 
   const handleSortToggle = (field: string) => {
     if (sortBy === field) {
@@ -94,11 +100,7 @@ export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
     }
   };
 
-  const filteredDisplayCases = searchTerm
-    ? cases.filter((c) =>
-        c.caseNumber.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : cases;
+  const filteredDisplayCases = cases;
 
   return (
     <div className="space-y-5">
@@ -135,7 +137,10 @@ export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(0);
+            }}
             placeholder="Search by Case Number (e.g. SYN-2026-)..."
             className="w-full text-xs rounded-lg border border-slate-300 pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -297,7 +302,20 @@ export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
                         <span className="text-slate-400 italic">Unscheduled</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-right space-x-2">
+                    <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                      {role !== 'JUDGE' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setScheduleModalCase(c);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100 font-medium text-[11px] transition-colors"
+                          title="Directly allocate courtroom & schedule"
+                        >
+                          <CalendarPlus className="w-3.5 h-3.5 text-blue-700" />
+                          <span>{c.nextHearingDate ? 'Re-allocate' : 'Schedule'}</span>
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -339,6 +357,23 @@ export const CaseListPage: React.FC<CaseListPageProps> = ({ onSelectCase }) => {
           </div>
         </div>
       </div>
+
+      {/* Direct Schedule Modal */}
+      {scheduleModalCase && (
+        <ManualScheduleModal
+          caseId={scheduleModalCase.id}
+          caseNumber={scheduleModalCase.caseNumber}
+          caseType={scheduleModalCase.caseType}
+          initialJudgeId={scheduleModalCase.assignedJudge?.id}
+          initialCourtroomId={scheduleModalCase.assignedCourtroom?.id}
+          initialScheduledTime={scheduleModalCase.nextHearingDate || undefined}
+          onClose={() => setScheduleModalCase(null)}
+          onSuccess={() => {
+            setScheduleModalCase(null);
+            fetchCases();
+          }}
+        />
+      )}
     </div>
   );
 };

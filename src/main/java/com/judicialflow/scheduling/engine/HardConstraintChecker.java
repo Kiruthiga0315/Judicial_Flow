@@ -1,6 +1,7 @@
 package com.judicialflow.scheduling.engine;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
@@ -119,6 +120,18 @@ public class HardConstraintChecker {
         // Handle next-day overlap
         if (endTime.isBefore(startTime)) {
             return false;
+        }
+
+        // Hard constraint: Judge must not be on leave on this calendar date
+        LocalDate date = start.toLocalDate();
+        if (judge.getLeaves() != null) {
+            for (SchedulingInput.DateRange leave : judge.getLeaves()) {
+                if (leave.getStartDate() != null && leave.getEndDate() != null) {
+                    if (!date.isBefore(leave.getStartDate()) && !date.isAfter(leave.getEndDate())) {
+                        return false; // Violates hard constraint: judge is on leave
+                    }
+                }
+            }
         }
 
         for (SchedulingInput.AvailabilityWindow window : judge.getAvailabilityWindows()) {

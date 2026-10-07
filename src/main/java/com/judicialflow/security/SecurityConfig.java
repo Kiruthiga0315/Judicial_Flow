@@ -86,6 +86,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/cases/**").hasAnyRole("ADMIN", "REGISTRAR")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/cases/**").hasAnyRole("ADMIN", "REGISTRAR")
 
+                        .requestMatchers(HttpMethod.POST, "/api/v1/judges/*/leave").hasAnyRole("ADMIN", "REGISTRAR", "JUDGE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/judges/*/leaves/*").hasAnyRole("ADMIN", "REGISTRAR", "JUDGE")
                         .requestMatchers(HttpMethod.POST, "/api/v1/judges/**").hasAnyRole("ADMIN", "REGISTRAR")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/judges/**").hasAnyRole("ADMIN", "REGISTRAR")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/judges/**").hasAnyRole("ADMIN", "REGISTRAR")

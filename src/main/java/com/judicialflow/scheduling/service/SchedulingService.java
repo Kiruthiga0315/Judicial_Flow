@@ -59,6 +59,7 @@ public class SchedulingService {
     private final JudgeRepository judgeRepository;
     private final CourtroomRepository courtroomRepository;
     private final HearingRepository hearingRepository;
+    private final com.judicialflow.common.JudgeLeaveRepository judgeLeaveRepository;
     private final PriorityScoreRepository priorityScoreRepository;
     private final SchedulingRunRepository runRepository;
     private final SchedulingProposalRepository proposalRepository;
@@ -282,6 +283,45 @@ public class SchedulingService {
         int duration = request.getDurationMinutes() > 0 ? request.getDurationMinutes()
                 : config.getDefaultHearingDurationMinutes();
 
+        // Check if judge is on approved leave
+        if (judgeLeaveRepository.existsByJudgeIdAndDate(judge.getId(), request.getScheduledTime().toLocalDate())) {
+            throw new ConflictException(String.format(
+                    "Judge %s is on approved leave on %s", judge.getName(), request.getScheduledTime().toLocalDate()));
+        }
+
+        // Check for conflicting committed hearings
+        LocalDateTime slotStart = request.getScheduledTime();
+        LocalDateTime slotEnd = slotStart.plusMinutes(duration);
+
+        List<Hearing> potentialConflicts = hearingRepository.findPotentialConflicts(
+                judge.getId(),
+                courtroom.getId(),
+                HearingStatus.SCHEDULED,
+                slotStart.minusHours(24),
+                slotEnd.plusHours(24)
+        );
+
+        for (Hearing h : potentialConflicts) {
+            LocalDateTime hStart = h.getScheduledTime();
+            LocalDateTime hEnd = hStart.plusMinutes(h.getEstimatedDurationMinutes());
+            if (slotStart.isBefore(hEnd) && hStart.isBefore(slotEnd)) {
+                if (h.getJudge().getId().equals(judge.getId())) {
+                    throw new ConflictException(String.format(
+                            "Scheduling conflict: Judge %s already has another hearing (%s) scheduled from %s to %s",
+                            judge.getName(),
+                            h.getLegalCase() != null ? h.getLegalCase().getCaseNumber() : "Case",
+                            hStart, hEnd));
+                }
+                if (h.getCourtroom().getId().equals(courtroom.getId())) {
+                    throw new ConflictException(String.format(
+                            "Scheduling conflict: Courtroom %s is already booked for another hearing (%s) from %s to %s",
+                            courtroom.getName(),
+                            h.getLegalCase() != null ? h.getLegalCase().getCaseNumber() : "Case",
+                            hStart, hEnd));
+                }
+            }
+        }
+
         // Create the override record
         SchedulingOverride override = SchedulingOverride.builder()
                 .legalCase(legalCase)
@@ -302,12 +342,19 @@ public class SchedulingService {
                 .scheduledTime(request.getScheduledTime())
                 .estimatedDurationMinutes(duration)
                 .status(HearingStatus.SCHEDULED)
+                .createdByEngine(false)
                 .build();
-        hearingRepository.save(hearing);
+        hearing = hearingRepository.save(hearing);
 
-        // Update case status
+        // Update any existing proposals for this case to OVERRIDDEN
+        proposalRepository.updateStatusByCaseIdAndOldStatus(
+                legalCase.getId(), ProposalStatus.PROPOSED, ProposalStatus.OVERRIDDEN);
+
+        // Update case status and assignments
         legalCase.setCurrentStatus(CaseStatus.SCHEDULED);
         legalCase.setAssignedJudge(judge);
+        legalCase.setAssignedCourtroom(courtroom);
+        legalCase.setNextHearingDate(request.getScheduledTime());
         caseRepository.save(legalCase);
 
         // Audit log
@@ -545,7 +592,20 @@ public class SchedulingService {
                 })
                 .toList();
 
-        // Load judges with availability
+        // Load active judge leaves for the horizon
+        LocalDate horizonStart = LocalDate.now().plusDays(1);
+        LocalDate horizonEnd = horizonStart.plusDays(horizonDays + 4);
+        List<com.judicialflow.common.models.JudgeLeave> activeLeaves = judgeLeaveRepository.findActiveLeavesInRange(horizonStart, horizonEnd);
+        Map<UUID, List<SchedulingInput.DateRange>> leavesByJudge = activeLeaves.stream()
+                .collect(Collectors.groupingBy(
+                        l -> l.getJudge().getId(),
+                        Collectors.mapping(
+                                l -> SchedulingInput.DateRange.builder().startDate(l.getStartDate()).endDate(l.getEndDate()).build(),
+                                Collectors.toList()
+                        )
+                ));
+
+        // Load judges with availability and leaves
         List<Judge> judges = judgeRepository.findAll();
         List<SchedulingInput.JudgeInfo> judgeInfos = judges.stream()
                 .map(j -> SchedulingInput.JudgeInfo.builder()
@@ -558,6 +618,7 @@ public class SchedulingService {
                                         .endTime(w.getEndTime())
                                         .build())
                                 .toList())
+                        .leaves(leavesByJudge.getOrDefault(j.getId(), List.of()))
                         .build())
                 .toList();
 
@@ -578,7 +639,6 @@ public class SchedulingService {
                 .toList();
 
         // Load existing scheduled hearings in the horizon
-        LocalDate horizonStart = LocalDate.now().plusDays(1); // Start scheduling from tomorrow
         LocalDateTime from = horizonStart.atStartOfDay();
         LocalDateTime to = from.plusDays(horizonDays + 4); // Extra buffer for weekends
         List<Hearing> existingHearings = hearingRepository.findAllByStatusBetween(

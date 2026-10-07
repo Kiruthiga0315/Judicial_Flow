@@ -175,7 +175,7 @@ describe('Feature and Role Guard Interaction Tests', () => {
     render(<CaseListPage onSelectCase={vi.fn()} />);
 
     await waitFor(() => {
-      expect(listSpy).toHaveBeenCalledWith(0, 15, 'filingDate', 'DESC', undefined, undefined);
+      expect(listSpy).toHaveBeenCalledWith(0, 15, 'filingDate', 'DESC', undefined, undefined, undefined);
     });
 
     // Click sort header for Case Number
@@ -183,7 +183,7 @@ describe('Feature and Role Guard Interaction Tests', () => {
     fireEvent.click(caseNumberHeader);
 
     await waitFor(() => {
-      expect(listSpy).toHaveBeenCalledWith(0, 15, 'caseNumber', 'DESC', undefined, undefined);
+      expect(listSpy).toHaveBeenCalledWith(0, 15, 'caseNumber', 'DESC', undefined, undefined, undefined);
     });
   });
 
@@ -207,7 +207,7 @@ describe('Feature and Role Guard Interaction Tests', () => {
     fireEvent.change(typeSelect, { target: { value: 'BAIL' } });
 
     await waitFor(() => {
-      expect(listSpy).toHaveBeenCalledWith(0, 15, 'filingDate', 'DESC', 'BAIL', undefined);
+      expect(listSpy).toHaveBeenCalledWith(0, 15, 'filingDate', 'DESC', 'BAIL', undefined, undefined);
     });
   });
 

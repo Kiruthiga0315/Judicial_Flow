@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -65,17 +66,85 @@ public class DevDataSeeder implements CommandLineRunner {
             log.info("Seeded dev user: registrar (REGISTRAR)");
         }
 
-        // Ensure at least one Judge record exists for the dev judge user
-        Judge devJudge = judgeRepository.findAll().stream().findFirst().orElseGet(() -> {
-            Judge j = Judge.builder()
-                    .name("Hon. Justice Sharma")
-                    .specialization("CRIMINAL")
-                    .build();
-            Judge saved = judgeRepository.save(j);
-            log.info("Seeded dev Judge entity: '{}' with id={}", saved.getName(), saved.getId());
-            return saved;
-        });
+        // Helper availability window generators
+        List<java.time.DayOfWeek> workDays = List.of(
+                java.time.DayOfWeek.MONDAY,
+                java.time.DayOfWeek.TUESDAY,
+                java.time.DayOfWeek.WEDNESDAY,
+                java.time.DayOfWeek.THURSDAY,
+                java.time.DayOfWeek.FRIDAY
+        );
 
+        java.util.function.Supplier<List<com.judicialflow.common.models.JudgeAvailabilityWindow>> judgeWindows = () ->
+                workDays.stream().map(d -> com.judicialflow.common.models.JudgeAvailabilityWindow.builder()
+                        .dayOfWeek(d)
+                        .startTime(java.time.LocalTime.of(9, 0))
+                        .endTime(java.time.LocalTime.of(17, 0))
+                        .build()).toList();
+
+        java.util.function.Supplier<List<com.judicialflow.common.models.CourtroomAvailabilityWindow>> courtroomWindows = () ->
+                workDays.stream().map(d -> com.judicialflow.common.models.CourtroomAvailabilityWindow.builder()
+                        .dayOfWeek(d)
+                        .startTime(java.time.LocalTime.of(9, 0))
+                        .endTime(java.time.LocalTime.of(17, 0))
+                        .build()).toList();
+
+        // 1. Ensure existing judges have availability populated
+        for (Judge j : judgeRepository.findAll()) {
+            if (j.getAvailabilityWindows() == null || j.getAvailabilityWindows().isEmpty()) {
+                j.setAvailabilityWindows(judgeWindows.get());
+                judgeRepository.save(j);
+                log.info("Populated default availability windows for Judge: {}", j.getName());
+            }
+        }
+
+        // 2. Ensure existing courtrooms have availability populated
+        for (Courtroom cr : courtroomRepository.findAll()) {
+            if (cr.getAvailability() == null || cr.getAvailability().isEmpty()) {
+                cr.setAvailability(courtroomWindows.get());
+                courtroomRepository.save(cr);
+                log.info("Populated default availability windows for Courtroom: {}", cr.getName());
+            }
+        }
+
+        // 3. Ensure at least 5 specialized judges exist for proper bench capacity
+        if (judgeRepository.count() < 5) {
+            List<String[]> devJudges = List.of(
+                    new String[]{"Hon. Justice Sharma", "CRIMINAL"},
+                    new String[]{"Hon. Justice Mukherjee", "CIVIL"},
+                    new String[]{"Hon. Justice Iyer", "BAIL"},
+                    new String[]{"Hon. Justice Reddy", "POCSO"},
+                    new String[]{"Hon. Justice Patel", "MATRIMONIAL"}
+            );
+            for (String[] jData : devJudges) {
+                if (judgeRepository.findAll().stream().noneMatch(j -> j.getName().equalsIgnoreCase(jData[0]))) {
+                    Judge j = judgeRepository.save(Judge.builder()
+                            .name(jData[0])
+                            .specialization(jData[1])
+                            .availabilityWindows(judgeWindows.get())
+                            .build());
+                    log.info("Seeded bench Judge: '{}' ({}) with id={}", j.getName(), j.getSpecialization(), j.getId());
+                }
+            }
+        }
+
+        // 4. Ensure at least 4 courtrooms exist for concurrent hearing capacity
+        if (courtroomRepository.count() < 4) {
+            List<String> roomNames = List.of("Court Room 1", "Court Room 2", "Court Room 3", "Court Room 4");
+            for (String roomName : roomNames) {
+                if (courtroomRepository.findAll().stream().noneMatch(r -> r.getName().equalsIgnoreCase(roomName))) {
+                    Courtroom cr = courtroomRepository.save(Courtroom.builder()
+                            .name(roomName)
+                            .capacity(60)
+                            .availability(courtroomWindows.get())
+                            .build());
+                    log.info("Seeded Courtroom: '{}' with id={}", cr.getName(), cr.getId());
+                }
+            }
+        }
+
+        // Ensure dev judge user is linked to first judge
+        Judge devJudge = judgeRepository.findAll().stream().findFirst().orElseThrow();
         UUID judgeEntityId = devJudge.getId();
 
         if (!userRepository.existsByUsername("judge")) {
@@ -100,13 +169,7 @@ public class DevDataSeeder implements CommandLineRunner {
 
         // Seed sample courtroom, case, and hearing for the dev judge if none exist
         if (hearingRepository.count() == 0) {
-            Courtroom room = courtroomRepository.findAll().stream().findFirst().orElseGet(() -> {
-                Courtroom cr = Courtroom.builder()
-                        .name("Court Room 1")
-                        .capacity(50)
-                        .build();
-                return courtroomRepository.save(cr);
-            });
+            Courtroom room = courtroomRepository.findAll().stream().findFirst().orElseThrow();
 
             Case devCase = caseRepository.findAll().stream().findFirst().orElseGet(() -> {
                 Case c = Case.builder()
