@@ -84,7 +84,7 @@ public class SecurityConfig {
                         // Write endpoints (POST, PUT, DELETE, PATCH): REGISTRAR and ADMIN
                         .requestMatchers(HttpMethod.POST, "/api/v1/cases/**").hasAnyRole("ADMIN", "REGISTRAR")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/cases/**").hasAnyRole("ADMIN", "REGISTRAR")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/cases/**").hasAnyRole("ADMIN", "REGISTRAR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/cases/**").hasRole("ADMIN")
 
                         .requestMatchers(HttpMethod.POST, "/api/v1/judges/*/leave").hasAnyRole("ADMIN", "REGISTRAR", "JUDGE")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/judges/*/leaves/*").hasAnyRole("ADMIN", "REGISTRAR", "JUDGE")

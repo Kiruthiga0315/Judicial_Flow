@@ -67,4 +67,8 @@ public interface PriorityScoreRepository extends JpaRepository<PriorityScore, UU
               )
             """)
     int pruneScoresOlderThanExceptLatest(@Param("cutoff") java.time.LocalDateTime cutoff);
+
+    @Query("SELECT ps.legalCase.id, ps.totalScore FROM PriorityScore ps ORDER BY ps.computedAt DESC")
+    List<Object[]> findAllCaseScoresSummary();
 }
+

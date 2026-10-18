@@ -134,19 +134,19 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-jf-ink/65 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border-2 border-jf-border-subtle overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="bg-slate-900 px-6 py-4 flex items-center justify-between text-white border-b border-slate-800">
+        <div className="bg-[#201F35] px-6 py-5 flex items-center justify-between text-white border-b-2 border-[#434164] border-t-4 border-t-[#E65100]">
           <div>
             <div className="flex items-center gap-2">
-              <Scale className="w-4 h-4 text-amber-400" />
-              <h3 className="text-base font-semibold">Direct Courtroom & Schedule Allocation</h3>
+              <Scale className="w-4 h-4 text-jf-apricot" />
+              <h3 className="text-base font-bold">Direct Courtroom & Schedule Allocation</h3>
             </div>
-            <p className="text-xs text-slate-300 mt-1 flex items-center gap-2">
-              <span>Case: <strong className="font-mono text-amber-300">{caseNumber}</strong></span>
+            <p className="text-xs text-[#C4C3E3] mt-1 flex items-center gap-2">
+              <span>Case: <strong className="font-mono tabular-nums text-jf-apricot font-bold">{caseNumber}</strong></span>
               {caseType && (
-                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300 border border-slate-700">
+                <span className="px-2 py-0.5 rounded bg-white/15 text-[10px] text-white border border-white/25 font-bold uppercase tracking-wider">
                   {caseType}
                 </span>
               )}
@@ -154,7 +154,7 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors p-1 rounded-md"
+            className="text-[#C4C3E3] hover:text-white hover:bg-white/10 transition-colors p-1.5 rounded-lg cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -163,8 +163,8 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {conflictError && (
-            <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2.5 text-red-800 text-xs">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div className="p-3.5 bg-jf-orange/10 border border-jf-orange/30 rounded-lg flex items-start gap-2.5 text-jf-text-orange text-xs">
+              <AlertCircle className="w-4 h-4 text-jf-text-orange shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold">Allocation Blocked</p>
                 <p className="mt-0.5 leading-relaxed">{conflictError}</p>
@@ -172,8 +172,8 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
             </div>
           )}
 
-          <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 text-xs text-blue-900 flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+          <div className="bg-jf-lavender/15 p-3 rounded-lg border border-jf-lavender/30 text-xs text-jf-ink flex items-start gap-2">
+            <Sparkles className="w-4 h-4 text-jf-violet shrink-0 mt-0.5" />
             <p className="leading-relaxed">
               Direct allocation bypasses engine proposal queues and immediately commits the hearing to the courtroom calendar with high-priority audit tracking.
             </p>
@@ -181,14 +181,14 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <User className="w-3.5 h-3.5 text-slate-500" /> Presiding Judge *
+              <label className="block text-xs font-semibold text-jf-ink mb-1 flex items-center gap-1">
+                <User className="w-3.5 h-3.5 text-jf-violet/70" /> Presiding Judge *
               </label>
               <select
                 required
                 value={judgeId}
                 onChange={(e) => setJudgeId(e.target.value)}
-                className="w-full text-xs rounded-md border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full text-xs rounded-md border border-jf-border-subtle px-3 py-2 bg-white text-jf-ink focus:outline-none jf-focus-ring"
               >
                 <option value="">Select Judge</option>
                 {judges.map((j) => (
@@ -200,14 +200,14 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-slate-500" /> Courtroom *
+              <label className="block text-xs font-semibold text-jf-ink mb-1 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-jf-violet/70" /> Courtroom *
               </label>
               <select
                 required
                 value={courtroomId}
                 onChange={(e) => setCourtroomId(e.target.value)}
-                className="w-full text-xs rounded-md border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full text-xs rounded-md border border-jf-border-subtle px-3 py-2 bg-white text-jf-ink focus:outline-none jf-focus-ring"
               >
                 <option value="">Select Courtroom</option>
                 {courtrooms.map((cr) => (
@@ -221,22 +221,21 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-slate-500" /> Date & Time Slot *
+              <label className="block text-xs font-semibold text-jf-ink mb-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-jf-violet/70" /> Date & Time Slot *
               </label>
               <input
                 type="datetime-local"
                 required
                 value={scheduledTime}
                 onChange={(e) => setScheduledTime(e.target.value)}
-                className="w-full text-xs rounded-md border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-              </input>
+                className="w-full text-xs rounded-md border border-jf-border-subtle px-3 py-2 bg-white text-jf-ink tabular-nums focus:outline-none jf-focus-ring"
+              />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-slate-500" /> Duration (minutes) *
+              <label className="block text-xs font-semibold text-jf-ink mb-1 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-jf-violet/70" /> Duration (minutes) *
               </label>
               <input
                 type="number"
@@ -246,7 +245,7 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
                 required
                 value={durationMinutes}
                 onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                className="w-full text-xs rounded-md border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full text-xs rounded-md border border-jf-border-subtle px-3 py-2 bg-white text-jf-ink tabular-nums focus:outline-none jf-focus-ring"
               />
               <div className="flex gap-1.5 mt-1.5">
                 {[30, 45, 60, 90, 120].map((mins) => (
@@ -256,8 +255,8 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
                     onClick={() => setDurationMinutes(mins)}
                     className={`px-1.5 py-0.5 text-[10px] rounded border transition-colors ${
                       durationMinutes === mins
-                        ? 'bg-blue-900 text-white border-blue-900 font-semibold'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-jf-violet text-white border-jf-violet font-semibold'
+                        : 'bg-white text-jf-ink border-jf-border-subtle hover:bg-jf-canvas'
                     }`}
                   >
                     {mins}m
@@ -268,7 +267,7 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-jf-ink mb-1">
               Allocation Reason / Administrative Justification *
             </label>
             <div className="flex flex-wrap gap-1.5 mb-2">
@@ -277,7 +276,7 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
                   key={idx}
                   type="button"
                   onClick={() => setReason(qr)}
-                  className="px-2 py-1 text-[11px] bg-slate-100 text-slate-700 hover:bg-slate-200 rounded border border-slate-200 text-left transition-colors"
+                  className="px-2 py-1 text-[11px] bg-white text-jf-ink hover:bg-jf-canvas rounded border border-jf-border-subtle text-left transition-colors jf-focus-ring"
                 >
                   {qr}
                 </button>
@@ -289,26 +288,26 @@ export const ManualScheduleModal: React.FC<ManualScheduleModalProps> = ({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Provide a clear judicial / administrative justification for this direct allocation..."
-              className="w-full text-xs rounded-md border border-slate-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full text-xs rounded-md border border-jf-border-subtle bg-white text-jf-ink p-2.5 focus:outline-none jf-focus-ring"
             />
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-[11px] text-jf-ink-muted mt-0.5">
               Logged to the immutable judicial audit trail under actor: <strong>{user?.username || 'Registrar'}</strong>.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <div className="pt-3 border-t border-jf-border-subtle flex justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="px-4 py-2 border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="px-4 py-2 border border-jf-border-subtle rounded-md text-xs font-medium text-jf-ink hover:bg-jf-canvas transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-4 py-2 bg-blue-900 text-white rounded-md text-xs font-medium hover:bg-blue-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              className="px-4 py-2 jf-btn-primary rounded-md text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
             >
               {isLoading ? (
                 <>

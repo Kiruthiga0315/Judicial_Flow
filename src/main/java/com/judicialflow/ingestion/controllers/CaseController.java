@@ -29,11 +29,17 @@ public class CaseController {
 
     private final CaseService caseService;
 
+    @PostMapping("/register")
+    @Operation(summary = "Register a new case", description = "Registrar entry for a new case, generating case number and initial score.")
+    public ResponseEntity<RegisterCaseResponse> registerCase(@Valid @RequestBody RegisterCaseRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(caseService.registerCase(request));
+    }
     @PostMapping
     @Operation(summary = "Create a new case", description = "Ingests a new legal case into the system with filing date, case type, and optional linked cases/judge.")
     @ApiResponse(responseCode = "201", description = "Case successfully created", content = @Content(schema = @Schema(implementation = CaseResponse.class)))
     @ApiResponse(responseCode = "400", description = "Validation failure or invalid case type", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "Case number already exists", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+
     public ResponseEntity<CaseResponse> createCase(@Valid @RequestBody CreateCaseRequest request) {
         CaseResponse response = caseService.createCase(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -81,6 +87,15 @@ public class CaseController {
             @RequestParam(required = false) com.judicialflow.common.enums.CaseType caseType,
             @RequestParam(required = false, defaultValue = "100") Integer limit) {
         return ResponseEntity.ok(caseService.getAgingReport(caseType, limit));
+    }
+
+    @GetMapping("/stats")
+    @Operation(summary = "Get registry-wide or filtered docket KPI statistics",
+            description = "Returns aggregate counts of total cases, critical urgency cases (>= 70), high statutory cases (45-69), and allocated scheduled slots.")
+    @ApiResponse(responseCode = "200", description = "Registry statistics calculated successfully")
+    public ResponseEntity<CaseRegistryStatsResponse> getStats(
+            @ParameterObject CaseFilterCriteria criteria) {
+        return ResponseEntity.ok(caseService.getRegistryStats(criteria));
     }
 
     @DeleteMapping("/{id}")

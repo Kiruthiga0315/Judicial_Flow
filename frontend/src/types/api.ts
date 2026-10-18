@@ -26,6 +26,16 @@ export interface Case {
   litigantContactEmail?: string | null;
 }
 
+export interface CaseRegistryStats {
+  totalCases: number;
+  criticalUrgencyCount: number;
+  highStatutoryCount: number;
+  allocatedSlotsCount: number;
+  extremePendencyCount: number;
+  elevatedAgingCount: number;
+  imminentStatutoryCount: number;
+}
+
 export interface ScoreFactorBreakdown {
   factorName: string;
   rawValue?: number | string | null;

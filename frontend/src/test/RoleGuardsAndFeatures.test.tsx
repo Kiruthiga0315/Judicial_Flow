@@ -211,6 +211,40 @@ describe('Feature and Role Guard Interaction Tests', () => {
     });
   });
 
+  it('case list displays accurate court-wide KPI stats from getRegistryStats across all statuses', async () => {
+    vi.spyOn(api, 'listCases').mockResolvedValue({
+      content: [mockCase],
+      page: 0,
+      size: 15,
+      totalElements: 2101,
+      totalPages: 141,
+      last: false,
+    });
+
+    const statsSpy = vi.spyOn(api, 'getRegistryStats').mockResolvedValue({
+      totalCases: 2101,
+      criticalUrgencyCount: 315,
+      highStatutoryCount: 840,
+      allocatedSlotsCount: 185,
+      extremePendencyCount: 0,
+      elevatedAgingCount: 0,
+      imminentStatutoryCount: 0,
+    });
+
+    render(<CaseListPage onSelectCase={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(statsSpy).toHaveBeenCalledWith(undefined, undefined, undefined);
+    });
+
+    // Check that KPI cards display true registry-wide metrics, not just single-page counts
+    await waitFor(() => {
+      expect(screen.getByText('315')).toBeInTheDocument(); // Critical Urgency
+      expect(screen.getByText('840')).toBeInTheDocument(); // High Statutory
+      expect(screen.getByText('185')).toBeInTheDocument(); // Allocated Slots
+    });
+  });
+
   it('proposals reject requires a reason before submission', async () => {
     const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
     const rejectSpy = vi.spyOn(api, 'rejectProposal').mockResolvedValue({} as any);

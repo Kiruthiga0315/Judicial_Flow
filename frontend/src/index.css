@@ -1,10 +1,240 @@
+@import '@fontsource/plus-jakarta-sans/400.css';
+@import '@fontsource/plus-jakarta-sans/500.css';
+@import '@fontsource/plus-jakarta-sans/600.css';
+@import '@fontsource/plus-jakarta-sans/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Core brand palette tokens (Standard hex values with 100% universal browser fidelity) */
+  --jf-lavender: #C4C3E3;      /* soft institutional lavender */
+  --jf-violet: #434164;        /* deep institutional violet (high contrast > 7:1) */
+  --jf-cream: #FCF9EE;         /* rich warm ivory/cream */
+  --jf-cream-darker: #F4EEDC;  /* subtle input inset cream */
+  --jf-canvas: #F6F5FB;        /* light institutional app canvas */
+  --jf-sage: #8A9E48;          /* deep sage green */
+  --jf-apricot: #FCDD9D;       /* warm apricot gold */
+  --jf-orange: #E65100;        /* high-visibility deep institutional hot orange */
+
+  /* Derived typography & contrast tokens */
+  --jf-ink: #201F35;           /* rich dark ink for sharp legible text */
+  --jf-ink-muted: #5C5A78;     /* distinct secondary text (contrast > 5.5:1) */
+  --jf-text-orange: #C43D00;   /* high contrast AA accessible orange */
+
+  /* Borders & interactive states */
+  --jf-border-subtle: #2B2A45; /* solid blackish-ink border with bold definition (contrast >11:1 on cream) */
+  --jf-border-strong: #161524; /* deep solid blackish border */
+  --jf-violet-hover: #32304C;  /* button hover */
+  --jf-focus-ring: 0 0 0 2px #FCF9EE, 0 0 0 4px #434164;
+
+  /* Urgency scale tokens */
+  --jf-urgency-critical-bg: #E65100;
+  --jf-urgency-critical-text: #FFFFFF;
+  --jf-urgency-high-bg: #FCDD9D;
+  --jf-urgency-high-text: #201F35;
+  --jf-urgency-elevated-bg: #C4C3E3;
+  --jf-urgency-elevated-text: #201F35;
+  --jf-urgency-routine-bg: #8A9E48;
+  --jf-urgency-routine-text: #FFFFFF;
+
+  /* Motion tokens */
+  --jf-ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+  --jf-duration-fast: 120ms;
+  --jf-duration-base: 220ms;
+  --jf-duration-slow: 400ms;
+
+  /* Radii */
+  --jf-radius-card: 28px;
+  --jf-radius-input: 12px;
+  --jf-radius-pill: 9999px;
+}
+
 @layer base {
   body {
-    @apply antialiased text-slate-900 bg-slate-50;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    @apply antialiased;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: var(--jf-ink);
+    background-color: var(--jf-lavender);
+    font-feature-settings: 'tnum' 1, 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Tabular numerals utility */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom interactive focus ring */
+.jf-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--jf-focus-ring);
+}
+
+/* Button micro-interactions */
+.jf-btn-primary {
+  background-color: var(--jf-violet);
+  color: var(--jf-cream);
+  transition: transform var(--jf-duration-fast) var(--jf-ease-entrance),
+              background-color var(--jf-duration-fast) ease-out,
+              box-shadow var(--jf-duration-fast) ease-out;
+}
+.jf-btn-primary:hover:not(:disabled) {
+  background-color: var(--jf-violet-hover);
+  transform: translateY(-1px);
+}
+.jf-btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.jf-btn-primary:hover:not(:disabled) .jf-arrow-nudge {
+  transform: translateX(3px);
+}
+
+/* Institutional Badge Utilities */
+.jf-badge-critical {
+  background-color: rgba(241, 100, 46, 0.15);
+  color: var(--jf-text-orange);
+  border: 1px solid rgba(241, 100, 46, 0.4);
+}
+.jf-badge-high {
+  background-color: rgba(252, 221, 157, 0.45);
+  color: var(--jf-ink);
+  border: 1px solid rgba(252, 221, 157, 0.9);
+}
+.jf-badge-elevated {
+  background-color: rgba(196, 195, 227, 0.35);
+  color: var(--jf-violet);
+  border: 1px solid rgba(80, 78, 118, 0.25);
+}
+.jf-badge-routine {
+  background-color: rgba(163, 181, 101, 0.2);
+  color: #3b5016;
+  border: 1px solid rgba(163, 181, 101, 0.4);
+}
+
+/* Micro-keyframes */
+@keyframes jf-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes jf-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes jf-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes jf-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes jf-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes jf-pulse-beacon {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+}
+
+.animate-jf-frame {
+  animation: jf-scale-in 450ms var(--jf-ease-entrance) forwards;
+}
+
+.animate-jf-fade-up {
+  animation: jf-fade-up 350ms var(--jf-ease-entrance) forwards;
+}
+
+.animate-jf-slide-down {
+  animation: jf-slide-down 200ms var(--jf-ease-entrance) forwards;
+}
+
+.animate-jf-page-enter {
+  animation: jf-page-enter 350ms var(--jf-ease-entrance) forwards;
+}
+
+.animate-stagger-1 {
+  animation: jf-card-enter 400ms var(--jf-ease-entrance) 0ms both;
+}
+
+.animate-stagger-2 {
+  animation: jf-card-enter 400ms var(--jf-ease-entrance) 60ms both;
+}
+
+.animate-stagger-3 {
+  animation: jf-card-enter 400ms var(--jf-ease-entrance) 120ms both;
+}
+
+.animate-stagger-4 {
+  animation: jf-card-enter 400ms var(--jf-ease-entrance) 180ms both;
+}
+
+.animate-beacon {
+  animation: jf-pulse-beacon 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Tactile Card Elevation */
+.jf-card-interactive {
+  transition: transform 220ms var(--jf-ease-entrance),
+              box-shadow 220ms var(--jf-ease-entrance),
+              border-color 220ms ease-out;
+}
+.jf-card-interactive:hover {
+  transform: translateY(-2px);
+}
+
+/* Reduced motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
