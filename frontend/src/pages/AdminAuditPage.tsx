@@ -7,6 +7,9 @@ import {
   Code,
   X,
   RefreshCw,
+  ShieldCheck,
+  FileText,
+  Database,
 } from 'lucide-react';
 
 export const AdminAuditPage: React.FC = () => {
@@ -57,21 +60,21 @@ export const AdminAuditPage: React.FC = () => {
   const actionBadgeColor = (action: string) => {
     switch (action) {
       case 'CREATE':
-        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+        return 'bg-jf-sage/20 text-jf-ink border-jf-sage/50 font-bold';
       case 'UPDATE':
-        return 'bg-blue-50 text-blue-800 border-blue-200';
+        return 'bg-jf-lavender/30 text-jf-ink border-jf-lavender/60 font-bold';
       case 'DELETE':
-        return 'bg-red-50 text-red-800 border-red-200';
+        return 'bg-jf-orange/15 text-jf-text-orange border-jf-orange/40 font-bold';
       case 'APPROVE':
-        return 'bg-purple-50 text-purple-800 border-purple-200';
+        return 'bg-jf-violet/15 text-jf-violet border-jf-violet/40 font-bold';
       case 'REJECT':
-        return 'bg-rose-50 text-rose-800 border-rose-200';
+        return 'bg-jf-orange/15 text-jf-text-orange border-jf-orange/40 font-bold';
       case 'REASSIGN':
-        return 'bg-amber-50 text-amber-800 border-amber-200';
+        return 'bg-jf-apricot/40 text-jf-ink border-jf-apricot/70 font-bold';
       case 'SCHEDULING_RUN':
-        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+        return 'bg-jf-violet/20 text-jf-violet border-jf-violet/50 font-bold';
       default:
-        return 'bg-slate-50 text-slate-700 border-slate-200';
+        return 'bg-jf-canvas text-jf-ink-muted border-jf-border-subtle font-medium';
     }
   };
 
@@ -81,14 +84,14 @@ export const AdminAuditPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-bold text-jf-ink tracking-tight">
               Immutable Judicial Audit Trail
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider border border-purple-200">
+            <span className="px-2.5 py-0.5 rounded-full bg-jf-apricot/40 text-jf-ink text-[10px] font-bold uppercase tracking-wider border border-jf-apricot/70">
               Admin Only
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-jf-ink-muted mt-0.5">
             Append-only cryptographic record of all case updates, proposal approvals, overrides, and engine runs.
           </p>
         </div>
@@ -96,17 +99,74 @@ export const AdminAuditPage: React.FC = () => {
         <button
           onClick={fetchAuditLogs}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-2xs self-start sm:self-auto"
+          className="inline-flex items-center gap-1.5 px-3 py-2 bg-jf-cream border border-jf-border-subtle rounded-lg text-xs font-semibold text-jf-ink hover:bg-white shadow-2xs self-start sm:self-auto transition-colors jf-focus-ring"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 text-jf-violet ${isLoading ? 'animate-spin' : ''}`} />
           Refresh Audit Log
         </button>
       </div>
 
+      {/* Audit Activity & Integrity KPI Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-jf-cream rounded-2xl border-2 border-jf-border-subtle p-4.5 shadow-card jf-card-interactive hover:shadow-card-hover relative overflow-hidden flex items-center justify-between animate-stagger-1">
+          <div className="absolute top-0 inset-x-0 h-1 bg-jf-violet" />
+          <div className="pt-0.5">
+            <span className="text-[11px] font-bold text-jf-ink-muted block uppercase tracking-wider">
+              Total Logged Records
+            </span>
+            <span className="text-3xl font-extrabold text-jf-ink font-mono tabular-nums tracking-tight">
+              {totalElements}
+            </span>
+            <span className="text-[11px] text-jf-violet font-semibold block mt-0.5">
+              Historical ledger
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-jf-lavender/35 border border-jf-lavender/60 flex items-center justify-center text-jf-violet shrink-0 shadow-2xs">
+            <FileText className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-jf-cream rounded-2xl border-2 border-jf-border-subtle p-4.5 shadow-card jf-card-interactive hover:shadow-card-hover relative overflow-hidden flex items-center justify-between animate-stagger-2">
+          <div className="absolute top-0 inset-x-0 h-1 bg-jf-apricot" />
+          <div className="pt-0.5">
+            <span className="text-[11px] font-bold text-jf-ink-muted block uppercase tracking-wider">
+              Current Page Slice
+            </span>
+            <span className="text-3xl font-extrabold text-jf-ink font-mono tabular-nums tracking-tight">
+              {logs.length} <span className="text-xs font-medium text-jf-ink-muted">/ {pageSize} per page</span>
+            </span>
+            <span className="text-[11px] text-jf-ink-muted font-medium block mt-0.5">
+              Page {page + 1} of {Math.max(1, totalPages)}
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-jf-apricot/30 border border-jf-apricot/60 flex items-center justify-center text-jf-ink shrink-0 shadow-2xs">
+            <Database className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-jf-cream rounded-2xl border-2 border-jf-border-subtle p-4.5 shadow-card jf-card-interactive hover:shadow-card-hover relative overflow-hidden flex items-center justify-between animate-stagger-3">
+          <div className="absolute top-0 inset-x-0 h-1 bg-jf-sage" />
+          <div className="pt-0.5">
+            <span className="text-[11px] font-bold text-jf-ink-muted block uppercase tracking-wider">
+              Cryptographic Integrity
+            </span>
+            <span className="text-lg font-bold text-jf-ink block mt-1">
+              Append-Only Tamper-Evident
+            </span>
+            <span className="text-[11px] text-jf-ink-muted font-medium block mt-0.5">
+              Zero state modification permitted
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-jf-sage/30 border border-jf-sage/60 flex items-center justify-center text-jf-ink shrink-0 shadow-2xs">
+            <ShieldCheck className="w-5 h-5 text-jf-sage" />
+          </div>
+        </div>
+      </div>
+
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      <div className="bg-jf-cream p-4.5 rounded-2xl border-2 border-jf-border-subtle shadow-card grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
         <div>
-          <label className="block text-slate-500 mb-1">Actor Username</label>
+          <label className="block text-jf-ink-muted mb-1 font-medium">Actor Username</label>
           <input
             type="text"
             value={actorFilter}
@@ -115,19 +175,19 @@ export const AdminAuditPage: React.FC = () => {
               setPage(0);
             }}
             placeholder="e.g. registrarAlice or SYSTEM"
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border-2 border-jf-border-subtle bg-white px-3 py-1.5 text-jf-ink focus:outline-none jf-focus-ring shadow-2xs"
           />
         </div>
 
         <div>
-          <label className="block text-slate-500 mb-1">Action</label>
+          <label className="block text-jf-ink-muted mb-1 font-medium">Action</label>
           <select
             value={actionFilter}
             onChange={(e) => {
               setActionFilter(e.target.value);
               setPage(0);
             }}
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border-2 border-jf-border-subtle px-3 py-1.5 bg-white text-jf-ink focus:outline-none jf-focus-ring shadow-2xs"
           >
             <option value="">All Actions</option>
             <option value="CREATE">CREATE</option>
@@ -141,14 +201,14 @@ export const AdminAuditPage: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-slate-500 mb-1">Entity Type</label>
+          <label className="block text-jf-ink-muted mb-1 font-medium">Entity Type</label>
           <select
             value={entityTypeFilter}
             onChange={(e) => {
               setEntityTypeFilter(e.target.value);
               setPage(0);
             }}
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border-2 border-jf-border-subtle px-3 py-1.5 bg-white text-jf-ink focus:outline-none jf-focus-ring shadow-2xs"
           >
             <option value="">All Entities</option>
             <option value="Case">Case</option>
@@ -162,7 +222,7 @@ export const AdminAuditPage: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-slate-500 mb-1">Entity ID (Partial/Exact)</label>
+          <label className="block text-jf-ink-muted mb-1 font-medium">Entity ID (Partial/Exact)</label>
           <input
             type="text"
             value={entityIdFilter}
@@ -171,22 +231,22 @@ export const AdminAuditPage: React.FC = () => {
               setPage(0);
             }}
             placeholder="e.g. case-101 or UUID"
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border-2 border-jf-border-subtle bg-white px-3 py-1.5 text-jf-ink focus:outline-none jf-focus-ring shadow-2xs"
           />
         </div>
       </div>
 
       {/* Audit Log Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-jf-cream rounded-2xl border-2 border-jf-border-subtle shadow-card overflow-hidden">
         {error && (
-          <div className="p-4 bg-red-50 border-b border-red-200 text-xs text-red-800">
+          <div className="p-4 bg-jf-orange/10 border-b border-jf-orange/30 text-xs text-jf-text-orange font-semibold">
             {error}
           </div>
         )}
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+          <table className="min-w-full divide-y-2 divide-jf-border-subtle text-left text-xs">
+            <thead className="bg-gradient-to-r from-jf-violet/15 via-jf-lavender/25 to-jf-violet/10 border-b-2 border-jf-violet/30 text-jf-violet font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th scope="col" className="px-4 py-3">Timestamp (UTC / IST)</th>
                 <th scope="col" className="px-4 py-3">Actor & Role</th>
@@ -198,17 +258,17 @@ export const AdminAuditPage: React.FC = () => {
                 <th scope="col" className="px-4 py-3 text-right">Diff</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
+            <tbody className="divide-y divide-jf-border-subtle bg-jf-cream">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-slate-500">
-                    <div className="w-6 h-6 border-2 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <td colSpan={8} className="py-16 text-center text-jf-ink-muted">
+                    <div className="w-6 h-6 border-2 border-jf-violet border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                     Loading audit trail records...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 italic">
+                  <td colSpan={8} className="py-12 text-center text-jf-ink-muted italic">
                     No audit records match the current filters.
                   </td>
                 </tr>
@@ -220,10 +280,10 @@ export const AdminAuditPage: React.FC = () => {
                   return (
                     <tr
                       key={entry.id}
-                      className="hover:bg-slate-50/60 transition-colors cursor-pointer"
+                      className="hover:bg-jf-canvas/60 transition-colors cursor-pointer"
                       onClick={() => hasStateDiff && setActiveDiffEntry(entry)}
                     >
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap font-mono text-[11px]">
+                      <td className="px-4 py-3 text-jf-ink-muted whitespace-nowrap font-mono tabular-nums text-[11px]">
                         {entryDate.toLocaleString('en-IN', {
                           day: '2-digit',
                           month: 'short',
@@ -235,8 +295,8 @@ export const AdminAuditPage: React.FC = () => {
                         })}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">{entry.actorUsername}</div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500">
+                        <div className="font-semibold text-jf-ink">{entry.actorUsername}</div>
+                        <span className="text-[10px] uppercase font-bold text-jf-ink-muted">
                           {entry.actorRole}
                         </span>
                       </td>
@@ -249,16 +309,16 @@ export const AdminAuditPage: React.FC = () => {
                           {entry.action}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-medium text-slate-800">
+                      <td className="px-4 py-3 font-medium text-jf-ink">
                         {entry.entityType}
                       </td>
-                      <td className="px-4 py-3 font-mono text-[11px] text-slate-600 truncate max-w-[120px]" title={entry.entityId}>
+                      <td className="px-4 py-3 font-mono tabular-nums text-[11px] text-jf-ink-muted truncate max-w-[120px]" title={entry.entityId}>
                         {entry.entityId}
                       </td>
-                      <td className="px-4 py-3 font-mono text-[10px] text-slate-500">
+                      <td className="px-4 py-3 font-mono text-[10px] text-jf-ink-muted">
                         {entry.reasonCode}
                       </td>
-                      <td className="px-4 py-3 text-slate-700 max-w-xs truncate" title={entry.details || ''}>
+                      <td className="px-4 py-3 text-jf-ink max-w-xs truncate" title={entry.details || ''}>
                         {entry.details || '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -268,12 +328,12 @@ export const AdminAuditPage: React.FC = () => {
                               e.stopPropagation();
                               setActiveDiffEntry(entry);
                             }}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-blue-900 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-jf-cream bg-jf-violet rounded-md hover:bg-jf-violet/90 transition-colors shadow-2xs jf-focus-ring"
                           >
-                            <Code className="w-3 h-3" /> Diff
+                            <Code className="w-3 h-3 text-jf-apricot" /> Diff
                           </button>
                         ) : (
-                          <span className="text-slate-400 text-[10px]">—</span>
+                          <span className="text-jf-ink-muted text-[10px]">—</span>
                         )}
                       </td>
                     </tr>
@@ -285,22 +345,22 @@ export const AdminAuditPage: React.FC = () => {
         </div>
 
         {/* Pagination */}
-        <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+        <div className="bg-jf-canvas/70 px-4 py-3 border-t border-jf-border-subtle flex items-center justify-between text-xs text-jf-ink-muted">
           <div>
-            Page <strong>{page + 1}</strong> of <strong>{Math.max(1, totalPages)}</strong> ({totalElements} total entries)
+            Page <strong className="text-jf-ink font-semibold">{page + 1}</strong> of <strong className="text-jf-ink font-semibold">{Math.max(1, totalPages)}</strong> ({totalElements} total entries)
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0 || isLoading}
-              className="px-3 py-1.5 border border-slate-300 rounded-md bg-white hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1.5 border border-jf-border-subtle rounded-md bg-jf-cream hover:bg-white text-jf-ink disabled:opacity-50 flex items-center gap-1 transition-colors jf-focus-ring"
             >
               <ChevronLeft className="w-3.5 h-3.5" /> Previous
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1 || isLoading}
-              className="px-3 py-1.5 border border-slate-300 rounded-md bg-white hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1.5 border border-jf-border-subtle rounded-md bg-jf-cream hover:bg-white text-jf-ink disabled:opacity-50 flex items-center gap-1 transition-colors jf-focus-ring"
             >
               Next <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -310,23 +370,23 @@ export const AdminAuditPage: React.FC = () => {
 
       {/* Before / After JSON Diff Modal */}
       {activeDiffEntry && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in">
-            <div className="bg-slate-900 px-6 py-4 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-jf-ink/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-jf-cream rounded-xl shadow-2xl max-w-3xl w-full border border-jf-border-subtle overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in">
+            <div className="bg-jf-ink px-6 py-4 text-white flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <span>State Transition Diff:</span>
-                  <span className="font-mono text-amber-300">
+                  <span className="font-mono text-jf-apricot">
                     {activeDiffEntry.entityType} ({activeDiffEntry.entityId})
                   </span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-jf-lavender/80 mt-0.5">
                   Action: {activeDiffEntry.action} | Performed by: {activeDiffEntry.actorUsername} ({activeDiffEntry.actorRole})
                 </p>
               </div>
               <button
                 onClick={() => setActiveDiffEntry(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-md"
+                className="text-jf-lavender hover:text-white p-1 rounded-md transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -334,20 +394,20 @@ export const AdminAuditPage: React.FC = () => {
 
             <div className="p-6 overflow-y-auto flex-1 space-y-4 text-xs">
               {activeDiffEntry.details && (
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="font-semibold text-slate-700">Audit Justification: </span>
-                  <span className="text-slate-600">{activeDiffEntry.details}</span>
+                <div className="p-3 bg-white rounded-lg border border-jf-border-subtle">
+                  <span className="font-semibold text-jf-ink">Audit Justification: </span>
+                  <span className="text-jf-ink-muted">{activeDiffEntry.details}</span>
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Before State */}
                 <div className="space-y-1.5">
-                  <div className="font-semibold text-slate-700 flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <div className="font-semibold text-jf-ink flex items-center gap-1.5 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-jf-orange"></span>
                     Before State (JSONB)
                   </div>
-                  <pre className="p-3 bg-slate-900 text-slate-100 rounded-lg font-mono text-[11px] overflow-x-auto max-h-80 border border-slate-800 leading-relaxed">
+                  <pre className="p-3 bg-[#1E1D33] text-jf-lavender rounded-lg font-mono text-[11px] overflow-x-auto max-h-80 border border-jf-ink/30 leading-relaxed">
                     {activeDiffEntry.beforeState
                       ? JSON.stringify(activeDiffEntry.beforeState, null, 2)
                       : '// No prior state (CREATE or Initial Record)'}
@@ -356,11 +416,11 @@ export const AdminAuditPage: React.FC = () => {
 
                 {/* After State */}
                 <div className="space-y-1.5">
-                  <div className="font-semibold text-slate-700 flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <div className="font-semibold text-jf-ink flex items-center gap-1.5 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-jf-sage"></span>
                     After State (JSONB)
                   </div>
-                  <pre className="p-3 bg-slate-900 text-emerald-300 rounded-lg font-mono text-[11px] overflow-x-auto max-h-80 border border-slate-800 leading-relaxed">
+                  <pre className="p-3 bg-[#1E1D33] text-emerald-300 rounded-lg font-mono text-[11px] overflow-x-auto max-h-80 border border-jf-ink/30 leading-relaxed">
                     {activeDiffEntry.afterState
                       ? JSON.stringify(activeDiffEntry.afterState, null, 2)
                       : '// Entity deleted'}
@@ -369,10 +429,10 @@ export const AdminAuditPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <div className="px-6 py-3 bg-jf-canvas/70 border-t border-jf-border-subtle flex justify-end">
               <button
                 onClick={() => setActiveDiffEntry(null)}
-                className="px-4 py-1.5 bg-slate-800 text-white rounded-md text-xs font-medium hover:bg-slate-700"
+                className="px-4 py-1.5 jf-btn-primary rounded-md text-xs font-semibold"
               >
                 Close
               </button>

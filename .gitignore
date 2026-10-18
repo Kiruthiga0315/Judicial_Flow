@@ -1,11 +1,5 @@
+# Java & Maven
 target/
-.idea/
-*.iml
-.env
-.DS_Store
-*.log
-
-# Standard Java/Maven ignores
 *.class
 *.jar
 *.war
@@ -14,11 +8,47 @@ target/
 .project
 .classpath
 .settings/
-.vscode/
+reports/
 
-# Standard macOS ignores
+# Node & Frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-ssr/
+*.local
+.npm/
+.vite/
+**/.vite/
+coverage/
+**/coverage/
+*.tsbuildinfo
+
+# IDE & Editors
+.idea/
+*.iml
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Environment & Logs
+.env
+.env.*
+!.env.example
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
 ._*
 .AppleDouble
 .LSOverride
 Icon
-reports/
+Thumbs.db
+ehthumbs.db
+
+# Tooling & Temporary Scratch Files
+.impeccable/
+*.pyc
+__pycache__/
+fix_test.py

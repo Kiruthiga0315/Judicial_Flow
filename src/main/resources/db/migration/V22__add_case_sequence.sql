@@ -1,0 +1,1 @@
+CREATE SEQUENCE IF NOT EXISTS case_number_seq START 1;

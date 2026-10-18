@@ -10,6 +10,7 @@ import {
   LogOut,
   UserCheck,
 } from 'lucide-react';
+import { JudicialLogomark } from './JudicialLogomark';
 
 interface NavbarProps {
   currentTab: string;
@@ -21,6 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
 
   const navItems = [
     { id: 'cases', label: 'Cases & Registry', icon: Briefcase, roles: ['ADMIN', 'REGISTRAR', 'JUDGE'] },
+    { id: 'register', label: 'Register Case', icon: FileCheck, roles: ['ADMIN', 'REGISTRAR'] },
     { id: 'aging', label: 'Aging & Urgency Report', icon: Clock, roles: ['ADMIN', 'REGISTRAR', 'JUDGE'] },
     { id: 'schedule', label: 'Cause List & Schedule', icon: Calendar, roles: ['ADMIN', 'REGISTRAR', 'JUDGE'] },
     { id: 'proposals', label: 'Proposed Allocations', icon: FileCheck, roles: ['ADMIN', 'REGISTRAR'] },
@@ -32,27 +34,38 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
 
   const roleBadgeColor =
     role === 'ADMIN'
-      ? 'bg-purple-100 text-purple-800 border-purple-200'
+      ? 'bg-jf-apricot text-jf-ink border-jf-apricot/80 font-bold shadow-2xs'
       : role === 'REGISTRAR'
-      ? 'bg-blue-100 text-blue-800 border-blue-200'
-      : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      ? 'bg-jf-lavender text-jf-violet border-jf-violet/40 font-bold shadow-2xs'
+      : 'bg-jf-sage text-jf-ink border-jf-sage/80 font-bold shadow-2xs';
 
   return (
-    <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-30">
+    <header className="bg-jf-cream/95 backdrop-blur-md border-b border-jf-border-subtle shadow-card-soft sticky top-0 z-30">
+      {/* Signature institutional brand accent strip */}
+      <div className="h-1 w-full bg-gradient-to-r from-jf-violet via-jf-orange to-jf-apricot" aria-hidden="true" />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center space-x-6">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onSelectTab('cases')}>
-              <div className="h-10 w-10 rounded-lg bg-blue-900 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-                JF
+            <div className="flex items-center gap-3">
+              <div
+                className="flex items-center cursor-pointer select-none py-1 hover:opacity-90 transition-opacity"
+                onClick={() => onSelectTab('cases')}
+                title="Go to Cases & Registry"
+              >
+                <JudicialLogomark size="sm" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-tight">JudicialFlow</h1>
-                <p className="text-xs text-slate-500 font-medium">Court Registry & Bench Management</p>
+
+              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-jf-sage/20 border border-jf-sage/40 text-[11px] font-semibold text-jf-ink select-none">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-jf-sage opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-jf-sage"></span>
+                </span>
+                <span>Registry Live</span>
               </div>
             </div>
 
-            <nav className="hidden md:flex space-x-1">
+            <nav className="hidden md:flex items-center space-x-1.5" aria-label="Main Navigation">
               {visibleItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
@@ -60,13 +73,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
                   <button
                     key={item.id}
                     onClick={() => onSelectTab(item.id)}
-                    className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    className={`relative inline-flex items-center px-3.5 py-2 rounded-lg text-sm transition-all duration-200 jf-focus-ring ${
                       isActive
-                        ? 'bg-blue-50 text-blue-900 border border-blue-200/60 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        ? 'bg-jf-violet text-jf-cream shadow-md shadow-jf-violet/20 font-semibold -translate-y-0.5'
+                        : 'text-jf-ink-muted hover:text-jf-ink hover:bg-jf-cream-darker/70 hover:scale-[1.01] font-medium'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 mr-2 ${isActive ? 'text-blue-700' : 'text-slate-400'}`} />
+                    <Icon className={`w-4 h-4 mr-2 ${isActive ? 'text-jf-apricot' : 'text-jf-violet/60'}`} />
                     {item.label}
                   </button>
                 );
@@ -77,12 +90,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2 text-right">
               <div>
-                <div className="text-sm font-semibold text-slate-900 flex items-center justify-end gap-1.5">
-                  <UserCheck className="w-3.5 h-3.5 text-slate-500" />
+                <div className="text-sm font-bold text-jf-ink flex items-center justify-end gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-jf-violet" />
                   <span>{user?.username}</span>
                 </div>
                 <div className="flex items-center justify-end mt-0.5">
-                  <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${roleBadgeColor}`}>
+                  <span className={`text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${roleBadgeColor}`}>
                     {role}
                   </span>
                 </div>
@@ -92,9 +105,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
             <button
               onClick={logout}
               title="Logout from session"
-              className="inline-flex items-center px-3 py-1.5 border border-slate-300 rounded-md text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 hover:text-red-700 hover:border-red-300 transition-colors"
+              className="inline-flex items-center px-3.5 py-1.5 border border-jf-border-subtle rounded-lg text-xs font-semibold text-jf-ink bg-jf-cream hover:bg-jf-orange/10 hover:text-jf-text-orange hover:border-jf-orange/40 jf-focus-ring transition-all shadow-2xs"
             >
-              <LogOut className="w-3.5 h-3.5 mr-1 text-slate-400" />
+              <LogOut className="w-3.5 h-3.5 mr-1 text-jf-violet" />
               Sign Out
             </button>
           </div>
@@ -102,15 +115,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
       </div>
 
       {/* Mobile navigation row */}
-      <div className="md:hidden border-t border-slate-200 px-4 py-2 flex overflow-x-auto space-x-1">
+      <div className="md:hidden border-t border-jf-border-subtle px-4 py-2 flex overflow-x-auto space-x-1.5 bg-jf-cream">
         {visibleItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onSelectTab(item.id)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-md text-xs whitespace-nowrap jf-focus-ring ${
               currentTab === item.id
-                ? 'bg-blue-900 text-white'
-                : 'text-slate-600 hover:bg-slate-100'
+                ? 'bg-jf-violet text-jf-cream font-bold shadow-xs'
+                : 'text-jf-ink-muted hover:bg-jf-cream-darker font-medium'
             }`}
           >
             {item.label}

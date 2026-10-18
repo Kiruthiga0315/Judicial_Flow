@@ -12,6 +12,7 @@ import {
   PriorityScoreResult,
   ScheduleDiffSummary,
   BatchJobStatusResponse,
+  CaseRegistryStats,
 } from '../types/api';
 
 class ApiClient {
@@ -35,7 +36,7 @@ class ApiClient {
     this.onUnauthorizedCallback = callback;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  public async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -61,14 +62,24 @@ class ApiClient {
 
     if (!response.ok) {
       let errorMessage = `HTTP Error ${response.status}`;
+      let fieldErrors = null;
       try {
-        const errorJson = await response.json();
-        errorMessage = errorJson.message || errorJson.error || errorMessage;
-      } catch {
         const text = await response.text();
-        if (text) errorMessage = text;
+        if (text) {
+          try {
+            const errorJson = JSON.parse(text);
+            errorMessage = errorJson.message || errorJson.error || errorMessage;
+            if (errorJson.errors) fieldErrors = errorJson.errors;
+          } catch {
+            errorMessage = text;
+          }
+        }
+      } catch {
+        // Ignore fallback reading errors
       }
       const error: any = new Error(errorMessage);
+      if (fieldErrors) error.fieldErrors = fieldErrors;
+
       error.status = response.status;
       throw error;
     }
@@ -106,6 +117,14 @@ class ApiClient {
     const params = new URLSearchParams({ limit: limit.toString() });
     if (caseType) params.append('caseType', caseType);
     return this.request<AgingReportItem[]>(`/api/v1/cases/aging-report?${params.toString()}`);
+  }
+
+  async getRegistryStats(type?: string, status?: string, search?: string): Promise<CaseRegistryStats> {
+    const params = new URLSearchParams();
+    if (type) params.append('caseType', type);
+    if (status) params.append('status', status);
+    if (search && search.trim()) params.append('search', search.trim());
+    return this.request<CaseRegistryStats>(`/api/v1/cases/stats?${params.toString()}`);
   }
 
   // --- Priority Scoring ---

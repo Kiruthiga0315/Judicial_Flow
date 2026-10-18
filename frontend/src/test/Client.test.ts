@@ -104,5 +104,29 @@ describe('ApiClient In-Memory Authentication', () => {
       );
     });
   });
+
+  describe('getRegistryStats', () => {
+    it('fetches aggregated docket KPI statistics with query parameters', async () => {
+      const mockStats = {
+        totalCases: 2101,
+        criticalUrgencyCount: 315,
+        highStatutoryCount: 840,
+        allocatedSlotsCount: 185,
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        json: async () => mockStats,
+      } as any);
+
+      const result = await api.getRegistryStats('BAIL', 'SCHEDULED', 'SYN-2026');
+      expect(result).toEqual(mockStats);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/cases/stats?caseType=BAIL&status=SCHEDULED&search=SYN-2026'),
+        expect.anything()
+      );
+    });
+  });
 });
 
